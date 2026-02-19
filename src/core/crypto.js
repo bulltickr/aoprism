@@ -5,18 +5,26 @@
  */
 
 const ENC_ALGO = { name: 'AES-GCM', length: 256 }
-const SALT_STRING = 'AOPRISM_VAULT_v1_SALT' // Fixed salt for deterministic key gen
 
 function getCrypto() {
     return globalThis.crypto || window.crypto
 }
 
 /**
+ * Generates a random 16-byte salt.
+ * @returns {Uint8Array}
+ */
+export function generateSalt() {
+    return getCrypto().getRandomValues(new Uint8Array(16))
+}
+
+/**
  * Derives a connection key from a wallet signature using HKDF.
  * @param {Uint8Array} signature - The raw signature bytes from the wallet
+ * @param {Uint8Array} salt - Random salt stored with the encrypted data
  * @returns {CryptoKey} The derived AES-GCM key
  */
-export async function deriveKeyFromSignature(signature) {
+export async function deriveKeyFromSignature(signature, salt) {
     const crypto = getCrypto().subtle
 
     // 1. Import Signature as Key Material
@@ -29,7 +37,6 @@ export async function deriveKeyFromSignature(signature) {
     )
 
     // 2. Derive AES Key using HKDF
-    const salt = new TextEncoder().encode(SALT_STRING)
     return await crypto.deriveKey(
         {
             name: 'HKDF',

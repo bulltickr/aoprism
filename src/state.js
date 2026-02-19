@@ -95,11 +95,20 @@ export function getState() {
     return state
 }
 
-export function setState(patch) {
+export function setState(patch, notify = true) {
+    const oldState = { ...state }
     state = { ...state, ...patch }
-    saveToStorage(state)
-    // Notify all listeners (usually the main render function)
-    listeners.forEach(fn => fn(state))
+
+    // Simple shallow comparison to prevent redundant renders
+    const changed = Object.keys(patch).some(key => oldState[key] !== state[key])
+
+    if (notify && changed) {
+        listeners.forEach(cb => cb(state))
+    }
+
+    // Persist critical fields
+    if (patch.jwk) localStorage.setItem('aoprism:wallet', JSON.stringify(patch.jwk))
+    saveToStorage(state) // Keep existing persistence for other fields
 }
 
 export function subscribe(fn) {

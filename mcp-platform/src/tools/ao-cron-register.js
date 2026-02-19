@@ -13,7 +13,7 @@ export const aoCronRegisterTool = {
         process: z.string().describe('The AO process ID to register for cron'),
         interval: z.string().describe('The cron interval (e.g. "1-minute", "1-hour")')
     }),
-    execute: async ({ process, interval }) => {
+    handler: async ({ process, interval }) => {
         try {
             const result = await aoSend({
                 process,

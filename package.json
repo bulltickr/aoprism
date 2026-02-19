@@ -13,13 +13,21 @@
     "deploy:ship": "npm run build && npm run deploy",
     "mcp:dev": "node mcp-platform/src/server.js",
     "mcp:start": "node mcp-platform/src/server.js",
-    "test": "npm test --prefix mcp-platform",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm test --prefix mcp-platform",
+    "test:frontend": "vitest run",
+    "test:e2e": "playwright test",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@testing-library/dom": "^10.4.1",
+    "happy-dom": "^20.6.3",
     "husky": "^9.1.7",
+    "rollup-plugin-visualizer": "^6.0.5",
     "vite": "^7.2.4",
-    "vite-plugin-node-polyfills": "^0.25.0"
+    "vite-plugin-node-polyfills": "^0.25.0",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",

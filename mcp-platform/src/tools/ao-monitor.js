@@ -14,7 +14,7 @@ export const aoMonitorTool = {
         process: z.string().describe('The AO process ID to monitor'),
         limit: z.number().default(10).describe('Number of recent messages to fetch')
     }),
-    execute: async ({ process, limit }) => {
+    handler: async ({ process, limit }) => {
         const ao = connect({
             MODE: AO_CONFIG.MODE,
             URL: AO_CONFIG.URL,

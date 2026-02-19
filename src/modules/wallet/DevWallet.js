@@ -17,18 +17,24 @@ export function renderDevWallet() {
   `).join('')
 
   return `
-    <div class="dev-wallet fade-in">
+    <section class="dev-wallet fade-in" aria-labelledby="dev-tools-title">
       <div class="hub-header" style="margin-bottom: 20px;">
-        <h2 class="card-title">Dev Tools</h2>
+        <h1 id="dev-tools-title" class="card-title" style="font-size: 1.5rem; margin: 0;">Dev Tools</h1>
         <p class="text-muted">Advanced interactions and debugging utilities.</p>
         
         <!-- Tab Navigation -->
-        <div style="display:flex; gap:12px; margin-top:16px; border-bottom:1px solid var(--glass-border);">
+        <div style="display:flex; gap:12px; margin-top:16px; border-bottom:1px solid var(--glass-border);" role="tablist">
             <button class="tab-btn ${activeTab === 'hyperbeam' ? 'active' : ''}" data-tab="hyperbeam" 
+                    role="tab"
+                    aria-selected="${activeTab === 'hyperbeam'}"
+                    aria-label="HyperBEAM Mainnet mode"
                     style="padding: 8px 16px; background:none; border:none; border-bottom: 2px solid ${activeTab === 'hyperbeam' ? 'var(--primary)' : 'transparent'}; color: ${activeTab === 'hyperbeam' ? 'var(--text-main)' : 'var(--text-muted)'}; cursor:pointer; font-weight:600;">
                 HyperBEAM (Mainnet)
             </button>
             <button class="tab-btn ${activeTab === 'legacy' ? 'active' : ''}" data-tab="legacy"
+                    role="tab"
+                    aria-selected="${activeTab === 'legacy'}"
+                    aria-label="Legacy Network Demo mode"
                     style="padding: 8px 16px; background:none; border:none; border-bottom: 2px solid ${activeTab === 'legacy' ? 'var(--primary)' : 'transparent'}; color: ${activeTab === 'legacy' ? 'var(--text-main)' : 'var(--text-muted)'}; cursor:pointer; font-weight:600;">
                 Legacy Net (Demo)
             </button>
@@ -95,7 +101,7 @@ export function renderDevWallet() {
             <strong>Error:</strong> ${state.error}
         </div>
       ` : ''}
-    </div>
+    </section>
   `
 }
 
@@ -105,50 +111,82 @@ export function attachDevEvents(root) {
   // Tab Switching
   root.querySelectorAll('.tab-btn').forEach(btn => {
     btn.onclick = () => {
-      state.devWallet.activeTab = btn.dataset.tab
-      state.response = null
-      state.error = null
-      setState({ devWallet: state.devWallet, response: null, error: null })
+      setState({
+        devWallet: {
+          ...state.devWallet,
+          activeTab: btn.dataset.tab
+        },
+        response: null,
+        error: null
+      })
     }
   })
 
   root.querySelector('#dev-process-id')?.addEventListener('input', (e) => {
-    state.devWallet.processId = e.target.value
+    setState({
+      devWallet: {
+        ...state.devWallet,
+        processId: e.target.value
+      }
+    })
   })
 
   root.querySelector('#dev-data')?.addEventListener('input', (e) => {
-    state.devWallet.data = e.target.value
+    setState({
+      devWallet: {
+        ...state.devWallet,
+        data: e.target.value
+      }
+    })
   })
 
   // Advanced config listeners
   root.querySelector('#dev-mu-url')?.addEventListener('change', (e) => {
-    state.devWallet.muUrl = e.target.value
+    setState({ devWallet: { ...state.devWallet, muUrl: e.target.value } })
   })
   root.querySelector('#dev-su-url')?.addEventListener('change', (e) => {
-    state.devWallet.schedulerUrl = e.target.value
+    setState({ devWallet: { ...state.devWallet, schedulerUrl: e.target.value } })
   })
   root.querySelector('#dev-cu-url')?.addEventListener('change', (e) => {
-    state.devWallet.cuUrl = e.target.value
+    setState({ devWallet: { ...state.devWallet, cuUrl: e.target.value } })
   })
 
   // Tag interactions
   root.querySelector('#add-tag-btn')?.addEventListener('click', () => {
-    state.devWallet.tags.push({ name: '', value: '' })
-    setState({ devWallet: state.devWallet })
+    setState({
+      devWallet: {
+        ...state.devWallet,
+        tags: [...(state.devWallet.tags || []), { name: '', value: '' }]
+      }
+    })
   })
 
   root.querySelectorAll('.tag-remove').forEach(btn => {
     btn.onclick = () => {
-      state.devWallet.tags.splice(btn.dataset.idx, 1)
-      setState({ devWallet: state.devWallet })
+      const idx = parseInt(btn.dataset.idx)
+      const newTags = (state.devWallet.tags || []).filter((_, i) => i !== idx)
+      setState({
+        devWallet: {
+          ...state.devWallet,
+          tags: newTags
+        }
+      })
     }
   })
 
   root.querySelectorAll('.tag-name, .tag-value').forEach(input => {
     input.oninput = (e) => {
-      const idx = e.target.dataset.idx
+      const idx = parseInt(e.target.dataset.idx)
       const field = e.target.classList.contains('tag-name') ? 'name' : 'value'
-      state.devWallet.tags[idx][field] = e.target.value
+      const newTags = (state.devWallet.tags || []).map((tag, i) =>
+        i === idx ? { ...tag, [field]: e.target.value } : tag
+      )
+      setState({
+        devWallet: {
+          ...state.devWallet,
+          tags: newTags
+        }
+      })
     }
   })
 

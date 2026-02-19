@@ -221,6 +221,25 @@ export async function getArBalance(address) {
   }
 }
 
+// --- Resilience Utilities ---
+
+/**
+ * Exponential backoff retry wrapper
+ */
+export async function withRetry(fn, maxRetries = 3, delay = 1000) {
+  let lastErr;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      console.warn(`[Retry] Attempt ${i + 1} failed: ${err.message}. Retrying in ${delay * Math.pow(2, i)}ms...`)
+      await new Promise(r => setTimeout(r, delay * Math.pow(2, i)))
+    }
+  }
+  throw lastErr
+}
+
 // HyperBEAM client (mainnet with MODE flag)
 export function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk }) {
   installFetchDebug()

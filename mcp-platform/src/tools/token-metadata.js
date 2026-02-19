@@ -12,7 +12,7 @@ export const tokenMetadataTool = {
     schema: z.object({
         token: z.string().describe('The AO process ID of the token contract')
     }),
-    execute: async ({ token }) => {
+    handler: async ({ token }) => {
         try {
             const metadata = await aoDryrunJson({
                 process: token,

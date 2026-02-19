@@ -13,6 +13,16 @@ class McpBridge {
         this.requestId = 1
     }
 
+    disconnect() {
+        if (this.eventSource) {
+            this.eventSource.close()
+            this.eventSource = null
+        }
+        this.isConnected = false
+        setState({ mcpConnected: false })
+        console.log('[Neural Bridge] Disconnected')
+    }
+
     connect() {
         console.log('[Neural Bridge] Connecting to Local Body...')
 
@@ -20,9 +30,10 @@ class McpBridge {
             this.eventSource = new EventSource(`${this.baseUrl}/sse`)
 
             this.eventSource.onopen = () => {
-                console.log('[Neural Bridge] ✅ Connected to Local Body')
+                // Connection opened, but let's be sure
                 this.isConnected = true
                 setState({ mcpConnected: true })
+                console.log('[Neural Bridge] ✅ Connected to Local Body')
             }
 
             this.eventSource.onerror = (err) => {

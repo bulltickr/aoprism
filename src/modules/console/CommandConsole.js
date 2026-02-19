@@ -5,7 +5,10 @@
  */
 
 import { getState, setState } from '../../state.js'
+import { DEFAULTS } from '../../core/config.js'
 import { makeAoClient, sendAndGetResult } from '../../core/aoClient.js'
+import { mcpBridge } from '../bridge/McpBridge.js'
+import { brain } from './ConsoleBrain.js'
 
 export function renderCommandConsole() {
     const state = getState()
@@ -14,7 +17,7 @@ export function renderCommandConsole() {
         state.console = {
             history: [
                 { type: 'info', text: '💎 AOPRISM Command Kernel v1.0.0' },
-                { type: 'info', text: 'Connected to AO Mainnet via HyperBEAM.' },
+                { type: 'info', text: `Connected to AO Mainnet via ${DEFAULTS.URL.includes('forward.computer') ? 'HyperBEAM' : 'Arweave Bridge'}.` },
                 { type: 'info', text: '---------------------------------------------------' },
                 { type: 'info', text: 'WHAT CAN I DO HERE?' },
                 { type: 'info', text: '1. Spawn Agents:   /spawn <ClientName> (Costs AR)' },
@@ -37,43 +40,60 @@ export function renderCommandConsole() {
     }).join('')
 
     return `
-    <div class="command-console fade-in" style="height: 100%;">
+    <section class="command-console fade-in" style="height: 100%;" aria-label="AOPRISM Command Console">
         <div class="card glass-card" style="height: calc(100vh - 140px); display: flex; flex-direction: column; background: rgba(0,0,0,0.85); border: 1px solid #333;">
-            <div class="console-header" style="padding: 10px 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
-                <span style="font-family: monospace; color: #4ade80;">user@aoprism:~$</span>
-                <button id="clear-console" class="btn btn-ghost btn-sm" style="font-size: 0.8rem;">Clear</button>
+            <div class="console-header" style="padding: 10px 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-family: monospace; color: #4ade80;" aria-hidden="true">user@aoprism:~$</span>
+                <button id="clear-console" class="btn btn-ghost btn-sm" style="font-size: 0.8rem;" aria-label="Clear console history">Clear</button>
             </div>
             
-            <div id="console-output" style="flex: 1; overflow-y: auto; padding: 20px; font-family: 'Fira Code', monospace; font-size: 0.9rem;">
+            <div id="console-output" 
+                 role="log" 
+                 aria-live="polite" 
+                 style="flex: 1; overflow-y: auto; padding: 20px; font-family: 'Fira Code', monospace; font-size: 0.9rem;">
                 ${historyHtml}
             </div>
             
             <div class="console-input-area" style="padding: 20px; border-top: 1px solid #333; display: flex; align-items: center;">
-                <span style="color: #4ade80; margin-right: 10px; font-weight: bold;">></span>
-                <input type="text" id="console-input" autofocus 
+                <label for="console-input" style="color: #4ade80; margin-right: 10px; font-weight: bold;" aria-hidden="true">></label>
+                <input type="text" id="console-input" 
                     style="flex: 1; background: transparent; border: none; color: white; font-family: 'Fira Code', monospace; font-size: 1rem; outline: none;"
                     placeholder="Enter command..."
+                    aria-label="Terminal input"
                 >
             </div>
         </div>
-    </div>
+    </section>
     `
 }
 
-import { brain } from './ConsoleBrain.js'
-
-// ... (renderCommandConsole stays mostly the same, updated help text added below)
+// Internal helper for immutable state updates
+function appendToConsole(text, type = 'info') {
+    const state = getState()
+    if (!state.console) return
+    const newHistory = [...state.console.history, { type, text }]
+    setState({
+        console: {
+            ...state.console,
+            history: newHistory
+        }
+    })
+}
 
 // Export for checking/testing
 export async function executeCommand(cmd, args) {
     const state = getState()
 
     // Log command
-    state.console.history.push({ type: 'cmd', text: `${cmd} ${args.join(' ')}` })
-    setState({ console: state.console }, false)
+    appendToConsole(`${cmd} ${args.join(' ')}`, 'cmd')
 
     try {
-        const { ao, signer } = await makeAoClient({ jwk: state.jwk, URL: state.url })
+        const { ao, signer } = await makeAoClient({
+            jwk: state.jwk,
+            URL: DEFAULTS.URL,
+            SCHEDULER: DEFAULTS.SCHEDULER,
+            MODE: DEFAULTS.MODE
+        })
 
         switch (cmd) {
             case '/help':
@@ -144,14 +164,12 @@ export async function executeCommand(cmd, args) {
                 const targetPid = args[0]
                 const task = args.slice(1).join(' ')
 
-                state.console.history.push({ type: 'info', text: `🧠 Generative Coding: "${task}"...` })
-                setState({ console: state.console }, false)
+                appendToConsole(`🧠 Generative Coding: "${task}"...`)
 
                 const code = await brain.autoDev(task)
 
-                state.console.history.push({ type: 'info', text: `📜 Generated Lua:\n${code}` })
-                state.console.history.push({ type: 'info', text: `🚀 Deploying to ${targetPid}...` })
-                setState({ console: state.console }, false)
+                appendToConsole(`📜 Generated Lua:\n${code}`)
+                appendToConsole(`🚀 Deploying to ${targetPid}...`)
 
                 const evalMsg = await ao.message({
                     process: targetPid,
@@ -193,10 +211,9 @@ export async function executeCommand(cmd, args) {
                 if (!args[0]) throw new Error('Usage: /spawn <process_name>')
                 const name = args[0]
                 const pid = await ao.spawn({
-                    module: "S7tS7f-X-V9V9B8mG_B9N28fJ0X9E0j0V6xWJ-3s2_9fN_qK8f_R3V9B8o", // HyperBEAM Mainnet AOS
+                    module: DEFAULTS.AOS_MODULE,
                     scheduler: DEFAULTS.SCHEDULER,
                     tags: [
-                        { name: 'Authority', value: 'fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L90gIyqkow' },
                         { name: 'Name', value: name }
                     ],
                     signer
@@ -207,6 +224,11 @@ export async function executeCommand(cmd, args) {
                 if (args.length < 2) throw new Error('Usage: /eval <pid> <lua_code>')
                 const target = args[0]
                 const valCode = args.slice(1).join(' ')
+
+                if (!confirm(`⚠️ WARNING: You are about to execute raw Lua code on process ${target}.\n\nCode:\n${valCode}\n\nProceed?`)) {
+                    return "Operation cancelled by user."
+                }
+
                 const msgId = await ao.message({
                     process: target,
                     tags: [{ name: 'Action', value: 'Eval' }],
@@ -248,13 +270,19 @@ export function attachConsoleEvents(root) {
     if (clearBtn) {
         clearBtn.onclick = () => {
             const state = getState()
-            state.console.history = []
-            setState({ console: state.console })
+            setState({
+                console: {
+                    ...state.console,
+                    history: []
+                }
+            })
         }
     }
 
     if (input) {
-        input.focus()
+        // Ensure focus if it was previously active or if the console was just rendered
+        requestAnimationFrame(() => input.focus())
+
         input.onkeydown = async (e) => {
             if (e.key === 'Enter') {
                 const raw = input.value.trim()
@@ -262,25 +290,29 @@ export function attachConsoleEvents(root) {
 
                 input.value = ''
 
-                const parts = raw.split(' ')
+                // Improved parser to handle quoted arguments
+                const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g
+                const parts = []
+                let match
+                while ((match = regex.exec(raw)) !== null) {
+                    parts.push(match[1] || match[2] || match[0])
+                }
+
+                if (parts.length === 0) return
                 const cmd = parts[0]
                 const args = parts.slice(1)
 
                 try {
                     const resultText = await executeCommand(cmd, args)
-                    const state = getState()
                     if (resultText) {
-                        state.console.history.push({ type: 'success', text: resultText })
+                        appendToConsole(resultText, 'success')
                     }
-                    setState({ console: state.console })
                 } catch (err) {
-                    const state = getState()
                     let msg = err.message
                     if (msg.includes('402') || msg.includes('Fund')) {
                         msg = "Spawn failed: Insufficient AR Balance. You need tokens to spawn agents."
                     }
-                    state.console.history.push({ type: 'error', text: `❌ ${msg}` })
-                    setState({ console: state.console })
+                    appendToConsole(`❌ ${msg}`, 'error')
                 }
             }
         }

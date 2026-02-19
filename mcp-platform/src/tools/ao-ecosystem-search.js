@@ -13,7 +13,7 @@ export const aoEcosystemSearchTool = {
         query: z.string().describe('Search term (e.g. "Llama", "Token", "Dex")'),
         type: z.enum(['Process', 'Module', 'Token']).optional().describe('Filter by type')
     }),
-    execute: async ({ query, type }) => {
+    handler: async ({ query, type }) => {
         try {
             // Arweave GQL query to find things by tags or content
             const tags = [

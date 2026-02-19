@@ -137,22 +137,22 @@ function getContentHtml() {
 
   if (vaultStatus === 'LOCKED') {
     return `
-            <div style="height: 100%; display: flex; align-items: center; justify-content: center;">
-                <div style="text-align: center; padding: 40px; background: rgba(0,0,0,0.4); border-radius: 16px; border: 1px solid var(--glass-border); max-width: 500px;">
-                    <div style="font-size: 4rem; margin-bottom: 20px; text-shadow: 0 0 20px rgba(74, 222, 128, 0.2);">🔒</div>
+            <section style="height: 100%; display: flex; align-items: center; justify-content: center;" aria-label="Vault Authentication">
+                <div class="card glass-card" style="text-align: center; padding: 40px; background: rgba(0,0,0,0.4); border-radius: 16px; border: 1px solid var(--glass-border); max-width: 500px;">
+                    <div style="font-size: 4rem; margin-bottom: 20px; text-shadow: 0 0 20px rgba(74, 222, 128, 0.2);" aria-hidden="true">🔒</div>
                     <h2 style="color: #fff; margin-bottom: 10px; font-family: 'Outfit', sans-serif;">Vault Encrypted</h2>
                     <p style="margin-bottom: 30px; color: var(--text-muted); line-height: 1.6;">
                         This agent's memory is encrypted with a client-side key derived from your wallet signature. 
                         <br><strong>We cannot see your data.</strong>
                     </p>
-                    <button id="unlock-btn" class="btn btn-primary btn-lg" style="width: 100%; padding: 16px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                        <span>🔑</span> Sign to Decrypt
+                    <button id="unlock-btn" class="btn btn-primary btn-lg" style="width: 100%; padding: 16px; display: flex; align-items: center; justify-content: center; gap: 10px;" aria-label="Sign to decrypt vault">
+                        <span aria-hidden="true">🔑</span> Sign to Decrypt
                     </button>
                     <div style="margin-top: 20px; font-size: 0.8rem; color: var(--text-muted);">
                         Zero-Knowledge Architecture • AES-256-GCM
                     </div>
                 </div>
-            </div>
+            </section>
         `
   }
 
@@ -168,15 +168,20 @@ function getContentHtml() {
 
   // UNLOCKED VIEW
   const listHtml = memories.map(mem => `
-        <div class="memory-item code-font" style="padding: 15px; border-bottom: 1px solid var(--glass-border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+        <button class="memory-item code-font" 
+                style="width: 100%; text-align: left; background: transparent; border: none; border-bottom: 1px solid var(--glass-border); padding: 15px; cursor: pointer; transition: background 0.2s;" 
+                onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+                onmouseout="this.style.background='transparent'"
+                aria-labelledby="mem-id-${mem.id}"
+        >
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <span style="color: var(--primary); font-weight: bold;">${mem.id}</span>
+                <span id="mem-id-${mem.id}" style="color: var(--primary); font-weight: bold;">${mem.id}</span>
                 <span style="font-size: 0.7rem; color: var(--text-muted);">${new Date(mem.timestamp).toLocaleTimeString()}</span>
             </div>
             <div style="color: #eee; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 ${mem.preview}
             </div>
-        </div>
+        </button>
     `).join('')
 
   return `

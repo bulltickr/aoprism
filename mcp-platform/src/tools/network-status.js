@@ -10,7 +10,7 @@ export const networkStatusTool = {
     name: 'network_status',
     description: 'Query the current health, load, and performance metrics of the AO/Hyperbeam network.',
     schema: z.object({}),
-    execute: async () => {
+    handler: async () => {
         try {
             const res = await fetch(AO_CONFIG.URL)
             const text = await res.text()

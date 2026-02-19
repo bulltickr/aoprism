@@ -2,9 +2,6 @@
 /**
  * server.js — AOPRISM
  * MCP server entry point. 
- * Supports Dual Transport:
- * 1. STDIO (for Claude Desktop, Cursor, etc.)
- * 2. SSE/HTTP (for AOPRISM Browser Client)
  */
 
 import express from 'express'
@@ -15,9 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { registerTools } from './tools/index.js'
 import { registerResources } from './resources/index.js'
-import { loadWallet, AO_CONFIG } from './ao-client.js'
-
-// ─── Parse CLI args ─────────────────────────────────────────────────────────
+import { loadWallet } from './ao-client.js'
 
 const args = process.argv.slice(2)
 const walletArg = args.find(a => a.startsWith('--wallet='))
@@ -25,99 +20,101 @@ const walletPath = walletArg ? walletArg.replace('--wallet=', '') : undefined
 const httpPortArg = args.find(a => a.startsWith('--http-port='))
 const HTTP_PORT = httpPortArg ? parseInt(httpPortArg.replace('--http-port=', '')) : 3000
 
-// ─── Load wallet ───────────────
-
 const wallet = loadWallet(walletPath)
-const walletStatus = wallet ? '✓ Wallet loaded (write tools enabled)' : '○ No wallet (read-only mode)'
 
-// ─── Create MCP Server ──────────────────────────────────────────────────────
-
-const server = new McpServer({
-    name: 'aoprism',
-    version: '0.1.0',
-    description: 'AOPRISM — The Parallel Reactive Intelligent System Mesh for AO',
-})
-
-// ─── Register Tools & Resources ─────────────────────────────────────────────
-
-const registeredTools = registerTools(server)
-const registeredResources = registerResources(server)
-
-// ─── Transport Handling ─────────────────────────────────────────────────────
+// We create two server instances to support both Stdio and SSE in parallel 
+// (McpServer connects 1:1 to a transport)
+function createBaseServer() {
+    const server = new McpServer({
+        name: 'aoprism',
+        version: '0.1.0',
+        description: 'AOPRISM — The Parallel Reactive Intelligent System Mesh for AO',
+    })
+    registerTools(server)
+    registerResources(server)
+    return server
+}
 
 async function startHttpServer() {
     const app = express()
+    const server = createBaseServer() // Dedicated HTTP instance
 
-    // Security: Only allow local connections for now (The "Human Firewall" foundation)
-    // Defense in Depth: Explicitly bind to loopback AND check request IP.
+    // Security Hardening
+    app.disable('x-powered-by')
+
+    const whitelist = ['http://localhost:5173', 'http://127.0.0.1:5173']
+    app.use(cors({
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps or curl) or whitelisted origins
+            if (!origin || whitelist.indexOf(origin) !== -1) {
+                callback(null, true)
+            } else {
+                callback(new Error('Not allowed by CORS'))
+            }
+        },
+        methods: ['GET', 'POST'],
+        allowedHeaders: ['Content-Type', 'Authorization']
+    }))
+
+    // Localhost-only firewall
     app.use((req, res, next) => {
-        const ip = req.ip || req.connection.remoteAddress
-        if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+        const ip = req.ip || req.socket.remoteAddress || req.connection?.remoteAddress
+        const isLocal = ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1' || ip === 'localhost' || !ip
+        if (isLocal) {
             next()
         } else {
-            console.error(`[Security Block] Rejected connection from ${ip}`)
-            res.status(403).send('Access Denied: Localhost Only')
+            console.error(`[Security] Blocked non-local attempt from ${ip}`)
+            res.status(403).send('Forbidden: Localhost Only')
         }
     })
 
-    app.use(cors({ origin: '*' })) // Allow Browser Client (which visits as localhost)
     app.use(bodyParser.json())
 
-    // SSE Transport Instance
     let sseTransport = null
 
     app.get('/sse', async (req, res) => {
-        console.error(`[Neural Bridge] 🔌 Client Connected via SSE`)
-        sseTransport = new SSEServerTransport('/messages', res)
-        await server.connect(sseTransport)
+        try {
+            console.error(`[Neural Bridge] 🔌 SSE Client Connecting...`)
+            sseTransport = new SSEServerTransport('/messages', res)
+            await server.connect(sseTransport)
+        } catch (err) {
+            console.error('[SSE Error]', err)
+            if (!res.headersSent) res.status(500).send('Internal Server Error')
+        }
     })
 
     app.post('/messages', async (req, res) => {
-        if (!sseTransport) {
-            res.sendStatus(400)
-            return
+        if (!sseTransport) return res.status(400).send('No active transport')
+        try {
+            await sseTransport.handlePostMessage(req, res)
+        } catch (err) {
+            console.error('[POST Error]', err)
+            if (!res.headersSent) res.status(500).send('Message Processing Error')
         }
-        await sseTransport.handlePostMessage(req, res)
     })
 
-    // BIND TO LOCALHOST ONLY
+    // Error Handler
+    app.use((err, req, res, next) => {
+        console.error('[Internal Error]', err.stack || err)
+        if (!res.headersSent) {
+            res.status(500).send('Internal Server Error')
+        }
+    })
+
     app.listen(HTTP_PORT, '127.0.0.1', () => {
-        console.error(`[Neural Bridge] 🌉 HTTP Server listening on port ${HTTP_PORT} (Localhost Only)`)
-        console.error(`[Neural Bridge] 🔗 Endpoint: http://localhost:${HTTP_PORT}/sse`)
+        console.error(`[Neural Bridge] 🌉 HTTP Server listening on port ${HTTP_PORT}`)
     })
 }
 
 async function startStdioServer() {
+    const server = createBaseServer() // Dedicated Stdio instance
     const transport = new StdioServerTransport()
     await server.connect(transport)
     console.error(`[Neural Bridge] ⌨️  STDIO Transport Active`)
 }
 
-// ─── Main Entry ─────────────────────────────────────────────────────────────
-
 async function main() {
-    const aoUrl = (process.env.AO_URL && process.env.AO_URL !== 'undefined')
-        ? process.env.AO_URL
-        : 'https://push.forward.computer'
-
-    console.error('╔════════════════════════════════════════╗')
-    console.error('║   💎 AOPRISM: AO Agent OS  v0.2.0      ║')
-    console.error('║   "The Neural Bridge" Edition          ║')
-    console.error('╠════════════════════════════════════════╣')
-    console.error(`║  AO URL:     ${aoUrl.replace('https://', '').slice(0, 24).padEnd(24)} ║`)
-    console.error(`║  Wallet:     ${walletStatus.slice(0, 24).padEnd(24)} ║`)
-    console.error(`║  HTTP Port:  ${String(HTTP_PORT).padEnd(24)} ║`)
-    console.error('╚════════════════════════════════════════╝')
-
-    // Start Both Transports
-    // 1. HTTP/SSE for Browser Client ("Neural Bridge")
-    await startHttpServer()
-
-    // 2. STDIO for IDEs ("Direct Link")
-    // Note: Stdio might block the thread if not handled carefully, but awaits should be fine 
-    // as McpServer supports multiple connections (it manages a set of connections).
-    // Actually, McpServer currently documentation implies 1:1, but the JS SDK allows multiple connect() calls 
-    // creating new sessions. Let's try parallel.
+    startHttpServer().catch(e => console.error("HTTP Error:", e))
     startStdioServer().catch(e => console.error("Stdio Error:", e))
 }
 

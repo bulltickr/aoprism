@@ -14,7 +14,7 @@ export const tokenTransferTool = {
         recipient: z.string().describe('The recipient wallet address'),
         quantity: z.string().describe('The amount of tokens to transfer (as a string to handle decimals)')
     }),
-    execute: async ({ token, recipient, quantity }) => {
+    handler: async ({ token, recipient, quantity }) => {
         try {
             const result = await aoSend({
                 process: token,

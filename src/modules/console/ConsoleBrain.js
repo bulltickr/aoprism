@@ -48,31 +48,86 @@ const PROVIDER_MAP = {
     'anthropic': { adapter: 'anthropic', model: 'claude-3-opus-20240229' }
 }
 
+import { generateSalt, deriveKeyFromSignature, encryptData, decryptData } from '../../core/crypto.js'
+
 export class ConsoleBrain {
     constructor() {
-        this.key = localStorage.getItem('aoprism_brain_key') || null
+        this.key = null
         this.provider = localStorage.getItem('aoprism_brain_provider') || 'openai'
         this.baseUrl = localStorage.getItem('aoprism_brain_url') || null
         this.model = localStorage.getItem('aoprism_brain_model') || null
+        this.controller = null
+        this.isLocked = true // Default state
+    }
+
+    /**
+     * Unlocks the Brain using the wallet signature.
+     * @param {Uint8Array} signature 
+     */
+    async unlock(signature) {
+        try {
+            const stored = localStorage.getItem('aoprism_brain_enc')
+            if (!stored) return false
+
+            const { iv, ciphertext, salt: saltBase64 } = JSON.parse(stored)
+
+            // Convert base64 salt back to Uint8Array
+            const salt = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0))
+
+            const key = await deriveKeyFromSignature(signature, salt)
+            const decryptedData = await decryptData({ iv, ciphertext }, key)
+
+            if (decryptedData && decryptedData.key) {
+                this.key = decryptedData.key
+                this.provider = decryptedData.provider || 'openai'
+                this.isLocked = false
+                return true
+            }
+            return false
+        } catch (e) {
+            console.error("Unlock failed", e)
+            return false
+        }
+    }
+
+    async lock(apiKey, signature, provider = 'openai') {
+        try {
+            const salt = generateSalt()
+            const key = await deriveKeyFromSignature(signature, salt)
+
+            const dataToEncrypt = { key: apiKey, provider }
+            const { iv, ciphertext } = await encryptData(dataToEncrypt, key)
+
+            // Convert salt to base64 for storage
+            const saltBase64 = btoa(String.fromCharCode(...salt))
+
+            const payload = JSON.stringify({ iv, ciphertext, salt: saltBase64 })
+            localStorage.setItem('aoprism_brain_enc', payload)
+
+            // Clear old insecure keys if they exist
+            localStorage.removeItem('aoprism_brain_key')
+
+            this.key = apiKey
+            this.provider = provider
+            this.isLocked = false
+            return true
+        } catch (e) {
+            console.error("Locking failed", e)
+            return false
+        }
+    }
+
+    abort() {
+        if (this.controller) {
+            this.controller.abort()
+            this.controller = null
+        }
     }
 
     setConfig(key, providerName = 'openai', url = null, model = null) {
-        const p = providerName.toLowerCase()
-        if (!PROVIDER_MAP[p] && !url) {
-            throw new Error(`Unknown provider '${p}'. Supported: ${Object.keys(PROVIDER_MAP).join(', ')}`)
-        }
-
-        this.key = key
-        this.provider = p
-        if (url) this.baseUrl = url
-        if (model) this.model = model
-
-        localStorage.setItem('aoprism_brain_key', key)
-        localStorage.setItem('aoprism_brain_provider', p)
-        if (url) localStorage.setItem('aoprism_brain_url', url)
-        if (model) localStorage.setItem('aoprism_brain_model', model)
-
-        return true
+        // This is now legacy/insecure or needs to route through lock()
+        // We will throw an error if user tries to set key without signature or just update props
+        throw new Error("Use /brain set-key to securely configure the Brain.")
     }
 
     hasKey() {
@@ -105,8 +160,11 @@ export class ConsoleBrain {
         const model = this.model || config.model || 'gpt-4-turbo-preview'
         const customHeaders = config.headers || {}
 
+        this.controller = new AbortController()
+
         const res = await fetch(url, {
             method: 'POST',
+            signal: this.controller.signal,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.key}`,
@@ -135,8 +193,11 @@ export class ConsoleBrain {
         const model = this.model || 'gemini-1.5-pro-latest'
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.key}`
 
+        this.controller = new AbortController()
+
         const res = await fetch(url, {
             method: 'POST',
+            signal: this.controller.signal,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [
@@ -157,8 +218,11 @@ export class ConsoleBrain {
         // Anthropic requires a proxy due to CORS (usually). attempting direct.
         // If this fails, user must use OpenRouter for Anthropic.
         const url = 'https://api.anthropic.com/v1/messages'
+        this.controller = new AbortController()
+
         const res = await fetch(url, {
             method: 'POST',
+            signal: this.controller.signal,
             headers: {
                 'x-api-key': this.key,
                 'anthropic-version': '2023-06-01',

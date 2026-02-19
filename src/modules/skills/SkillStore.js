@@ -88,9 +88,9 @@ function renderPublishModal() {
                     <textarea id="pub-code" class="input" style="height:150px; font-family:'Fira Code',monospace;" placeholder="return { Name = '...', Execute = function()... }">${storeState.publishForm.code}</textarea>
                 </div>
                 
-                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;">
-                    <button id="cancel-pub" class="btn btn-ghost">Cancel</button>
-                    <button id="confirm-pub" class="btn btn-primary">🚀 Publish to Network</button>
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;" role="group" aria-label="Publish actions">
+                    <button id="cancel-pub" class="btn btn-ghost" aria-label="Cancel publishing">Cancel</button>
+                    <button id="confirm-pub" class="btn btn-primary" aria-label="Confirm and publish to network">🚀 Publish to Network</button>
                 </div>
             </div>
         </div>
@@ -106,22 +106,22 @@ export function renderSkillStore() {
     const skillsList = storeState.skills
         .filter(s => s.Name.toLowerCase().includes(storeState.search.toLowerCase()))
         .map(skill => `
-            <div class="card" style="padding: 20px; display:flex; flex-direction:column; gap:12px; transition:transform 0.2s;">
+            <article class="card" style="padding: 20px; display:flex; flex-direction:column; gap:12px; transition:transform 0.2s;" aria-labelledby="skill-${skill.Name}">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div style="width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg, var(--primary), #a855f7); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; color:white;">
+                    <div style="width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg, var(--primary), #a855f7); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; color:white;" aria-hidden="true">
                         ${skill.Name[0]}
                     </div>
-                    <span style="font-size:0.7rem; color:var(--text-muted); padding:4px 8px; border:1px solid var(--glass-border); border-radius:12px;">v1.0</span>
+                    <span style="font-size:0.7rem; color:var(--text-muted); padding:4px 8px; border:1px solid var(--glass-border); border-radius:12px;" aria-label="Version 1.0">v1.0</span>
                 </div>
                 <div>
-                    <div style="font-weight:600; font-size:1.1rem; margin-bottom:4px;">${skill.Name}</div>
-                    <div style="font-size:0.9rem; color:var(--text-muted); line-height:1.4;">${skill.Description}</div>
+                    <h3 id="skill-${skill.Name}" style="font-weight:600; font-size:1.1rem; margin: 0 0 4px 0;">${skill.Name}</h3>
+                    <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.4; margin: 0;">${skill.Description}</p>
                 </div>
                 <div style="margin-top:auto; padding-top:12px; border-top:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center;">
                     <div style="font-size:0.8rem; color:var(--text-muted);">by ${skill.Publisher}</div>
-                    <button class="btn btn-primary" style="padding:6px 12px; font-size:0.8rem;" onclick="alert('Installing ${skill.Name}...')">⬇ INSTALL</button>
+                    <button class="btn btn-primary" style="padding:6px 12px; font-size:0.8rem;" aria-label="Install ${skill.Name}" onclick="alert('Installing ${skill.Name}...')">⬇ INSTALL</button>
                 </div>
-            </div>
+            </article>
         `).join('')
 
     return `

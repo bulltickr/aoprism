@@ -8,16 +8,21 @@ import { getState, setState } from '../../state.js'
 import { DEFAULTS } from '../../core/config.js'
 
 export async function fetchFeed() {
-    const hub = DEFAULTS.REGISTRY_ID
+    try {
+        const hub = DEFAULTS.REGISTRY_ID
 
-    // Mock data mimicking a real AO social feed
-    const mockPosts = [
-        { id: '1', author: 'Agent-Alpha-Prism', content: 'Autonomous verification mesh initialized. Monitoring parallel threads in #dev.', timestamp: Date.now() - 3600000, topic: 'dev', likes: 42 },
-        { id: '2', author: 'AOPRISM-Operator', content: 'Just deployed the new Kernel to the Permaweb. #general', timestamp: Date.now() - 1800000, topic: 'general', likes: 128 },
-        { id: '3', author: 'Finance-Bot-X', content: 'AR/USDC liquidity pool is deepening. Arb opportunities detected. #finance', timestamp: Date.now() - 900000, topic: 'finance', likes: 7 }
-    ]
+        // Mock data mimicking a real AO social feed
+        const mockPosts = [
+            { id: '1', author: 'Agent-Alpha-Prism', content: 'Autonomous verification mesh initialized. Monitoring parallel threads in #dev.', timestamp: Date.now() - 3600000, topic: 'dev', likes: 42 },
+            { id: '2', author: 'AOPRISM-Operator', content: 'Just deployed the new Kernel to the Permaweb. #general', timestamp: Date.now() - 1800000, topic: 'general', likes: 128 },
+            { id: '3', author: 'Finance-Bot-X', content: 'AR/USDC liquidity pool is deepening. Arb opportunities detected. #finance', timestamp: Date.now() - 900000, topic: 'finance', likes: 7 }
+        ]
 
-    setState({ socialFeed: mockPosts, activeTopic: 'all' })
+        setState({ socialFeed: mockPosts, activeTopic: 'all' })
+    } catch (err) {
+        console.error('Failed to fetch social feed:', err)
+        setState({ socialFeed: [], error: 'Failed to sync with social mesh.' })
+    }
 }
 
 export function renderSocialMesh() {
@@ -41,10 +46,15 @@ export function renderSocialMesh() {
     ]
 
     const topicsHtml = topics.map(t => `
-        <div class="topic-item ${activeTopic === t.id ? 'active' : ''}" data-topic="${t.id}">
-            <span class="topic-icon">${t.icon}</span>
+        <button class="topic-item ${activeTopic === t.id ? 'active' : ''}" 
+                data-topic="${t.id}"
+                role="tab"
+                aria-selected="${activeTopic === t.id}"
+                aria-label="Filter by ${t.label}"
+        >
+            <span class="topic-icon" aria-hidden="true">${t.icon}</span>
             <span class="topic-label">${t.label}</span>
-        </div>
+        </button>
     `).join('')
 
     // 2. CENTER COLUMN: The Feed
@@ -52,9 +62,9 @@ export function renderSocialMesh() {
         const avatarUrl = `https://robohash.org/${post.author}?set=set3&bgset=bg2&size=64x64`;
 
         return `
-        <div class="card glass-card post-card fade-in" style="margin-bottom: 15px; display: flex; gap: 16px; padding: 20px;">
+        <div class="card glass-card post-card fade-in" style="margin-bottom: 15px; display: flex; gap: 16px; padding: 20px;" role="article">
             <div class="post-avatar">
-                <img src="${avatarUrl}" alt="Avatar" style="width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--primary-glow); background: #000;">
+                <img src="${avatarUrl}" alt="${post.author.slice(0, 10)}... avatar" style="width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--primary-glow); background: #000;">
             </div>
             <div class="post-content" style="flex: 1;">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
@@ -71,15 +81,15 @@ export function renderSocialMesh() {
                 
                 <p style="font-size: 1rem; line-height: 1.5; margin: 0 0 12px 0; color: #e2e8f0;">${post.content}</p>
                 
-                <div class="post-actions" style="display: flex; gap: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
-                    <button class="action-btn">
-                        <span>💬</span> Reply
+                <div class="post-actions" style="display: flex; gap: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;" role="group" aria-label="Post actions">
+                    <button class="action-btn" aria-label="Reply to post">
+                        <span aria-hidden="true">💬</span> Reply
                     </button>
-                     <button class="action-btn">
-                        <span>🔃</span> Repost
+                     <button class="action-btn" aria-label="Repost this post">
+                        <span aria-hidden="true">🔃</span> Repost
                     </button>
-                    <button class="action-btn" style="color: ${post.likes > 10 ? 'var(--primary)' : 'inherit'}">
-                        <span>⚡</span> ${post.likes} Trust
+                    <button class="action-btn" style="color: ${post.likes > 10 ? 'var(--primary)' : 'inherit'}" aria-label="Trust this operator">
+                        <span aria-hidden="true">⚡</span> ${post.likes} Trust
                     </button>
                 </div>
             </div>

@@ -31,7 +31,7 @@ export const aoKnowledgeQueryTool = {
     schema: z.object({
         query: z.string().describe('Technical topic (e.g. "Token Standard", "Handlers")')
     }),
-    execute: async ({ query }) => {
+    handler: async ({ query }) => {
         const results = KNOWLEDGE_BASE.filter(kb =>
             kb.topic.toLowerCase().includes(query.toLowerCase()) ||
             kb.content.toLowerCase().includes(query.toLowerCase())

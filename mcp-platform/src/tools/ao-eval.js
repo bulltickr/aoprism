@@ -13,7 +13,7 @@ export const aoEvalTool = {
         process: z.string().describe('The AO process ID to evaluate code in'),
         code: z.string().describe('The LUA code snippet to execute')
     }),
-    execute: async ({ process, code }) => {
+    handler: async ({ process, code }) => {
         try {
             const result = await aoSend({
                 process,
