@@ -1,0 +1,27 @@
+{
+    "name": "aoprism",
+    "version": "0.1.0",
+    "description": "Decentralized MCP server for AO/Arweave skills platform",
+    "type": "module",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "node --watch src/server.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:live": "node test-suite/live-smoke.js",
+        "test:deep": "node test-suite/prism-verification.js"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.12.0",
+        "@permaweb/aoconnect": "^0.0.93",
+        "body-parser": "^2.2.2",
+        "cors": "^2.8.6",
+        "express": "^5.2.1",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "vitest": "^4.0.18",
+        "wasmoon": "^1.16.0"
+    }
+}

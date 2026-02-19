@@ -1,0 +1,30 @@
+{
+  "name": "aoprism",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "npx serve dist",
+    "start": "npm run build && npx serve dist",
+    "wallet:new": "node scripts/generate-wallet.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:ship": "npm run build && npm run deploy",
+    "mcp:dev": "node mcp-platform/src/server.js",
+    "mcp:start": "node mcp-platform/src/server.js",
+    "test": "npm test --prefix mcp-platform",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "vite": "^7.2.4",
+    "vite-plugin-node-polyfills": "^0.25.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@permaweb/aoconnect": "^0.0.93",
+    "arweave": "^1.15.7",
+    "mime-types": "^3.0.2"
+  }
+}
