@@ -193,8 +193,8 @@ export async function executeCommand(cmd, args) {
                 if (!args[0]) throw new Error('Usage: /spawn <process_name>')
                 const name = args[0]
                 const pid = await ao.spawn({
-                    module: "GYrbbe0VbHim_7Hi6zrOpHQXrSQz074ceLfDavisq8o",
-                    scheduler: "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA",
+                    module: "S7tS7f-X-V9V9B8mG_B9N28fJ0X9E0j0V6xWJ-3s2_9fN_qK8f_R3V9B8o", // HyperBEAM Mainnet AOS
+                    scheduler: DEFAULTS.SCHEDULER,
                     tags: [
                         { name: 'Authority', value: 'fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L90gIyqkow' },
                         { name: 'Name', value: name }

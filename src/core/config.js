@@ -1,6 +1,6 @@
 export const DEFAULTS = {
-  URL: 'https://arweave.net/gate', // or https://g8way.io
-  SCHEDULER: '_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA',
+  URL: 'https://push.forward.computer',
+  SCHEDULER: 'n_XZJhUnmldNFo4dhajoPZWhBXuJk-OcQr5JQ49c4Zo',
   MODE: 'mainnet',
-  REGISTRY_ID: '43 chars process id of registry'
+  REGISTRY_ID: 'B_B9N28fJ0X9E0j0V6xWJ-3s2_9fN_qK8f_R3V9B8o'
 }
