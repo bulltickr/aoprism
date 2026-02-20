@@ -90,6 +90,7 @@ export async function executeCommand(cmd, args) {
     try {
         const { ao, signer } = await makeAoClient({
             jwk: state.jwk,
+            publicKey: state.publicKey,
             URL: DEFAULTS.URL,
             SCHEDULER: DEFAULTS.SCHEDULER,
             MODE: DEFAULTS.MODE

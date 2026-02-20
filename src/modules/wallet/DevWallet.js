@@ -199,6 +199,7 @@ export function attachDevEvents(root) {
       if (activeTab === 'hyperbeam') {
         const { ao, signer } = await makeAoClient({
           jwk: state.jwk,
+          publicKey: state.publicKey,
           URL: state.devWallet.muUrl || DEFAULTS.URL,
           SCHEDULER: state.devWallet.schedulerUrl || DEFAULTS.SCHEDULER,
           CU_URL: state.devWallet.cuUrl

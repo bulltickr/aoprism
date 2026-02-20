@@ -7,6 +7,8 @@
 import { getState, setState, subscribe } from './state.js'
 import { UI } from './components/UI.js'
 import { getArBalance } from './core/aoClient.js'
+import { initCommandPalette } from './components/CommandPalette.js'
+import { initTimeLockVault } from './utils/TimeLockVault.js'
 
 // Cache for module renderers to support code-splitting
 const renderers = {
@@ -269,7 +271,7 @@ export function renderApp(root) {
             console.log("Brain not unlocked (no keys or invalid signature)")
           }
 
-          setState({ jwk, address, balance, activeModule: 'dashboard', loading: false })
+          await setState({ jwk, address, balance, activeModule: 'dashboard', loading: false })
           showToast('Identity Verified.', 'success')
         } catch (e) {
           console.error(e)
@@ -366,4 +368,19 @@ export function renderApp(root) {
 export function mount(root) {
   subscribe(() => renderApp(root))
   renderApp(root)
+
+  // Initialize Command Palette (Cmd+K)
+  initCommandPalette()
+
+  // Initialize Time-Lock Vault (5 minute timeout)
+  initTimeLockVault({
+    timeout: 5 * 60 * 1000, // 5 minutes
+    warningTime: 30 * 1000, // 30 second warning
+    onLock: () => {
+      console.log('[AOPRISM] Vault auto-locked')
+    },
+    onUnlock: () => {
+      console.log('[AOPRISM] Vault unlocked')
+    }
+  })
 }

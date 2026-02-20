@@ -22,11 +22,8 @@ describe('Crypto Utils', () => {
         const key1 = await deriveKeyFromSignature(sig, salt)
         const key2 = await deriveKeyFromSignature(sig, salt)
 
-        // Keys are opaque objects, but exporting them should yield same raw bytes
-        const raw1 = await crypto.subtle.exportKey('raw', key1) // Note: crypto.js sets extractable=false, so this might fail in real app but let's check code.
-        // Actually code sets extractable=false. We can't export.
-        // We can test by encrypting with one and decrypting with other.
-
+        // Keys are non-extractable, so we verify consistency via round-trip:
+        // encrypt with key1, decrypt with key2 — they must be identical if derived consistently
         const data = { msg: "test" }
         const { iv, ciphertext } = await encryptData(data, key1)
         const decrypted = await decryptData({ iv, ciphertext }, key2)

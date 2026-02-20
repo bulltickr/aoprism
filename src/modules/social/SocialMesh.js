@@ -10,6 +10,7 @@ import { DEFAULTS } from '../../core/config.js'
 export async function fetchFeed() {
     try {
         const hub = DEFAULTS.REGISTRY_ID
+        const { stateAuditor } = await import('../../core/state-auditor.js')
 
         // Mock data mimicking a real AO social feed
         const mockPosts = [
@@ -17,6 +18,17 @@ export async function fetchFeed() {
             { id: '2', author: 'AOPRISM-Operator', content: 'Just deployed the new Kernel to the Permaweb. #general', timestamp: Date.now() - 1800000, topic: 'general', likes: 128 },
             { id: '3', author: 'Finance-Bot-X', content: 'AR/USDC liquidity pool is deepening. Arb opportunities detected. #finance', timestamp: Date.now() - 900000, topic: 'finance', likes: 7 }
         ]
+
+        // Background audit simulation
+        mockPosts.forEach(post => {
+            // Simulated assignment history
+            const mockAssignments = [
+                { nonce: "1", epoch: 0 },
+                { nonce: "2", epoch: 0 },
+                { nonce: "3", epoch: 0 }
+            ]
+            stateAuditor.auditProcess(post.id, mockAssignments)
+        })
 
         setState({ socialFeed: mockPosts, activeTopic: 'all' })
     } catch (err) {
@@ -76,6 +88,7 @@ export function renderSocialMesh() {
                     </div>
                     <span style="font-size: 0.75rem; color: var(--text-muted); font-family: 'Fira Code', monospace;">
                         ${new Date(post.timestamp).toLocaleTimeString()}
+                        <span class="verify-shield" data-process="${post.id}" style="margin-left: 8px; cursor: help;" title="Holographic Proof Verified">🛡️</span>
                     </span>
                 </div>
                 
@@ -179,12 +192,30 @@ export function renderSocialMesh() {
 }
 
 export function attachSocialEvents(root) {
-    // Topic Switching
     root.querySelectorAll('.topic-item').forEach(item => {
         item.onclick = () => {
             const topic = item.dataset.topic
             setState({ activeTopic: topic })
         }
+    })
+
+    // [PHASE 5] Holographic Shield Interaction
+    const { stateAuditor } = import('../../core/state-auditor.js').then(({ stateAuditor }) => {
+        root.querySelectorAll('.verify-shield').forEach(shield => {
+            shield.onclick = (e) => {
+                e.stopPropagation()
+                const pid = shield.dataset.process
+                const result = stateAuditor.getAuditStatus(pid)
+
+                // Show a detailed toast about the holographic proof
+                import('../../App.js').then(app => {
+                    const msg = result.status === 'verified'
+                        ? `🛡️ Holographic Proof Valid: Checked ${result.count} transitions in Rust-WASM.`
+                        : `⚠️ Unverified State: Audit in progress or failed.`
+                    app.showToast(msg, result.status === 'verified' ? 'success' : 'info')
+                })
+            }
+        })
     })
 
     // Posting Logic
@@ -206,7 +237,11 @@ export function attachSocialEvents(root) {
 
                 // Import AO Client dynamically to ensure we have credentials
                 const { makeAoClient, sendAndGetResult } = await import('../../core/aoClient.js')
-                const { ao, signer } = makeAoClient({ jwk: state.jwk, URL: DEFAULTS.URL })
+                const { ao, signer } = await makeAoClient({
+                    jwk: state.jwk,
+                    publicKey: state.publicKey,
+                    URL: DEFAULTS.URL
+                })
 
                 // Broadcast to Registry
                 const msgId = await ao.message({

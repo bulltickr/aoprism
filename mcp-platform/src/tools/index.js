@@ -38,6 +38,50 @@ import { skillScaffoldTool } from './skill-scaffold.js'
 
 import { socialPostTool, socialFeedTool } from './social.js'
 import { gatewayConfigTool } from './gateway-config.js'
+import { aoTestTool } from './ao-test.js'
+import { aoBridgeTool } from './ao-bridge.js'
+import { aoAgentExecuteTool } from './ao-agent-execute.js'
+
+// Export all tools individually for use by MCP Server Hub
+export {
+    arweaveQueryTool,
+    aoDryrunTool,
+    aoSendTool,
+    skillsListTool,
+    skillsGetTool,
+    skillsSearchTool,
+    skillsRegisterTool,
+    skillsExecuteTool,
+    memoryStoreTool,
+    memoryRetrieveTool,
+    memoryListTool,
+    memoryDeleteTool,
+    aoSpawnTool,
+    aoEvalTool,
+    aoInfoTool,
+    tokenBalanceTool,
+    tokenTransferTool,
+    arweaveUploadTool,
+    arweaveDeployLuaTool,
+    aoMonitorTool,
+    tokenMetadataTool,
+    arweaveIdUpdateTool,
+    networkStatusTool,
+    aoInferenceTool,
+    aoDexQuoteTool,
+    aoDexSwapTool,
+    aoCronRegisterTool,
+    aoEcosystemSearchTool,
+    walletSpawnTool,
+    aoKnowledgeQueryTool,
+    skillScaffoldTool,
+    socialPostTool,
+    socialFeedTool,
+    gatewayConfigTool,
+    aoTestTool,
+    aoBridgeTool,
+    aoAgentExecuteTool
+}
 
 const ALL_TOOLS = [
     socialPostTool,
@@ -73,7 +117,10 @@ const ALL_TOOLS = [
     aoEcosystemSearchTool,
     walletSpawnTool,
     aoKnowledgeQueryTool,
-    skillScaffoldTool
+    skillScaffoldTool,
+    aoTestTool,
+    aoBridgeTool,
+    aoAgentExecuteTool
 ]
 
 
@@ -110,3 +157,6 @@ export function registerTools(server) {
 
     return ALL_TOOLS.map(t => t.name)
 }
+
+// Export the tools array for direct access
+export { ALL_TOOLS }

@@ -1,11 +1,25 @@
 # Changelog
 
-All notable changes to **AOPRISM** will be documented in this file.
+All notable changes to the **AOPRISM** project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.0.0-alpha.7] - 2026-02-20
+### 🚀 Added
+- **AI Agent Composer**: Visual builder for AO agents.
+- **AI Copilot**: intelligent dev assistant with Lua code generation.
+- **AO Testing Framework**: Standardized test suite for contracts.
+- **Process Marketplace**: Enhanced skill discovery and reviews.
+- **Cross-Chain Bridge**: Multi-bridge aggregator (deBridge, LayerZero).
+- **Rust Secure Enclave**: Hardware-backed signing and memory isolation.
+- **MCP Tool Hub**: Exposed 3 new tools (`ao_test`, `ao_bridge`, `ao_agent_execute`) for full AI-native parity.
+- **Documentation**: Condensed Roadmap to a 1-page vision doc and expanded Open Issues with 15+ architectural debt items.
+- **Production Build**: Verified 8.7MB optimized production bundle.
 
-## [Unreleased] - 2026-02-19
+### 🛠️ Fixed
+- **WASM Loading**: Resolved `ECONNREFUSED` issues via lazy evaluation.
+- **State Pollution**: Fixed singleton leaks in `TimeLockVault`.
+- **Dependencies**: Restored missing `idb` runtime.
+
+## [1.0.0-alpha.6] - 2026-02-19
 
 ### 🚀 Major Features
 - **Security Vault (Phase 2)**:

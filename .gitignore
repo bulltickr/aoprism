@@ -29,8 +29,25 @@ dist-ssr
 # Security
 wallet.json
 
+# Rust / WASM
+target/
+pkg/
+Cargo.lock
+**/error.log
+**/test_output.txt
+**/e2e_log*.txt
+
+# QA Reports
+tests/reports/
+
 # IDE / Agent Meta
 .gemini
 .agent
 .claude
-.github/workflows/antigravity.yml # Optional, but usually ignored if just local meta
+.github/workflows/antigravity.yml
+
+# Env
+.env
+.env.*
+!.env.example
+ # Optional, but usually ignored if just local meta

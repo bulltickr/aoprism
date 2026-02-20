@@ -124,21 +124,35 @@ AOPRISM follows strict engineering rigor:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 The AOPRISM Platform
+
+AOPRISM is a high-performance, security-hardened toolkit for the AO ecosystem, now featuring a full suite of flagship developer tools:
+
+1.  **AI Agent Composer**: A visual, drag-and-drop builder for composing complex AO agents using directed acyclic graphs (DAGs). Execute processes in parallel with a production-grade execution engine.
+2.  **AI Copilot**: An intelligent AO assistant for real-time code generation, intelligent debugging, and automated security auditing of Lua contracts.
+3.  **AO Testing Framework**: A native, frontend-based testing environment for AO processes. Supports `describe`/`it` blocks, mocking, and dry-run execution.
+4.  **Process Marketplace 2.0**: A rich ecosystem of AO skills with advanced metadata, dependency resolution, versioning, and verified participant reviews.
+5.  **Cross-Chain Bridge**: A unified multi-bridge aggregator (deBridge, LayerZero, Across) for seamless liquidity between Arweave and the broader DeFi landscape.
+6.  **MCP Server Hub**: Exposes 34+ AO tools to the universal Model Context Protocol, allowing any AI assistant to interact with AO natively.
+
+## 🛠️ Getting Started
 
 ### Prerequisites
-*   Node.js v18+
-*   Arweave Wallet (JWK) *or* use the built-in Guest Mode.
+*   🛰️ **Neural Bridge (MCP)**: AI-native connectivity via 37+ tools including `ao_test`, `ao_bridge`, and `ao_agent_execute`.
+*   🛡️ **Rust Enclave**: Secure signing and cryptographic auditing in the browser.
 
-### Installation
+## 🚀 Getting Started
+
 ```bash
-git clone https://github.com/permaweb/aoprism
+# Clone and install
+git clone https://github.com/aoprism/aoprism.git
 cd aoprism
 npm install
-```
 
-### Run the Interface
-```bash
+# Build the Rust WASM module (requires wasm-pack)
+npm run build:wasm
+
+# Start the dev server
 npm run dev
 # Opens http://localhost:5173
 ```

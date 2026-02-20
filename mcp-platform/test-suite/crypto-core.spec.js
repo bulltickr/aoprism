@@ -1,12 +1,13 @@
 
 import { describe, it, expect } from 'vitest'
-import { deriveKeyFromSignature, encryptData, decryptData } from '../../src/core/crypto.js'
+import { deriveKeyFromSignature, encryptData, decryptData, generateSalt } from '../../src/core/crypto.js'
 
 describe('Crypto Core (Client-Side Encryption)', () => {
 
     it('Should derive a key from a signature', async () => {
         const mockSignature = new Uint8Array(32).fill(1) // 32 bytes of deterministic noise
-        const key = await deriveKeyFromSignature(mockSignature)
+        const salt = generateSalt()
+        const key = await deriveKeyFromSignature(mockSignature, salt)
 
         expect(key).toBeDefined()
         expect(key.algorithm.name).toBe('AES-GCM')
@@ -16,7 +17,8 @@ describe('Crypto Core (Client-Side Encryption)', () => {
 
     it('Should encrypt and decrypt data correctly', async () => {
         const mockSignature = new Uint8Array(32).fill(2)
-        const key = await deriveKeyFromSignature(mockSignature)
+        const salt = generateSalt()
+        const key = await deriveKeyFromSignature(mockSignature, salt)
 
         const secretData = { note: 'Top Secret Plan', id: 123 }
 
@@ -34,9 +36,10 @@ describe('Crypto Core (Client-Side Encryption)', () => {
     it('Should fail to decrypt with wrong key', async () => {
         const sigA = new Uint8Array(32).fill(1)
         const sigB = new Uint8Array(32).fill(2) // Different signature
+        const salt = generateSalt()
 
-        const keyA = await deriveKeyFromSignature(sigA)
-        const keyB = await deriveKeyFromSignature(sigB)
+        const keyA = await deriveKeyFromSignature(sigA, salt)
+        const keyB = await deriveKeyFromSignature(sigB, salt)
 
         const secretData = { foo: 'bar' }
         const encrypted = await encryptData(secretData, keyA)
@@ -47,7 +50,8 @@ describe('Crypto Core (Client-Side Encryption)', () => {
 
     it('Should fail to decrypt tampered ciphertext', async () => {
         const sig = new Uint8Array(32).fill(1)
-        const key = await deriveKeyFromSignature(sig)
+        const salt = generateSalt()
+        const key = await deriveKeyFromSignature(sig, salt)
 
         const secretData = { foo: 'bar' }
         const encrypted = await encryptData(secretData, key)

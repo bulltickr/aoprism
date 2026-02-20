@@ -1,8 +1,7 @@
-import Arweave from 'arweave/web'
-import { connect } from '@permaweb/aoconnect/browser'
-import { dryrun, message, result, createDataItemSigner } from '@permaweb/aoconnect'
-import { ArweaveSigner, createData, getSignatureAndId } from '@dha-team/arbundles/web'
+// [PHASE 3] Static imports removed for bundle optimization.
+// These are now loaded dynamically within their respective functions.
 import { DEFAULTS } from './config.js'
+import { RustSigner } from './rust-bridge.js'
 
 function bytesToB64Url(bytes) {
   const b64 = bytesToB64(bytes)
@@ -35,24 +34,46 @@ async function importHttpSigKey(jwk) {
   )
 }
 
-function createBrowserJwkSigner(jwk) {
-  if (!jwk || typeof jwk !== 'object') throw new Error('Missing wallet key (jwk).')
-  if (!jwk.n || !jwk.e || !jwk.d) throw new Error('Invalid JWK: missing required RSA private key fields.')
+function createBrowserJwkSigner(jwk, publicKey = null) {
+  // [PHASE 4] If jwk is null, we assume the key is already in the Secure Enclave
+  // We need the public key (N modulus) to construct data items.
+  const useEnclave = !jwk
+  const effectivePublicKey = publicKey || jwk?.n
+
+  if (useEnclave) {
+    console.log('[aoClient] 🛡️ Initializing signer in Enclave-only mode. Effective PK available:', !!effectivePublicKey)
+  } else {
+    if (typeof jwk !== 'object') throw new Error('Missing wallet key (jwk).')
+    if (!jwk.n || !jwk.e || !jwk.d) throw new Error('Invalid JWK: missing required RSA private key fields.')
+  }
+
   if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available (crypto.subtle missing).')
 
-  // Initialize lazily so wallet creation remains snappy.
-  const addressPromise = jwkToAddress(jwk)
-  const httpSigKeyPromise = importHttpSigKey(jwk)
-  const arSigner = new ArweaveSigner(jwk)
+  // Initialize lazily. 
+  const addressPromise = jwk ? jwkToAddress(jwk) : Promise.resolve(null)
+
+  // Swapped ArweaveSigner for RustSigner (WASM)
+  // Passed effectivePublicKey (N modulus string) for Enclave-only mode
+  const arSigner = new RustSigner(jwk || effectivePublicKey)
 
   return async (create, format) => {
     if (typeof create !== 'function') throw new Error('Invalid signer invocation (missing create callback).')
 
+    // Defensive check for address derivation
+    const address = await addressPromise
+    if (useEnclave && !address && !publicKey) {
+      console.warn('[aoClient] Address not available yet in Enclave mode. Ensure wallet is connected.')
+    }
+
     if (format === 'ans104') {
+      // [PHASE 3] Dynamic import for arbundles
+      const { createData, getSignatureAndId } = await import('@dha-team/arbundles/web')
+
       // Ask the request builder for the data/tags/target/anchor, then build+sign the data item ourselves.
+      // Use the public key from the signer (which is always available)
       const { data, tags, target, anchor } = await create({
         type: 1,
-        publicKey: jwk.n,
+        publicKey: bytesToB64Url(arSigner.publicKey),
         alg: 'rsa-v1_5-sha256',
         passthrough: true
       })
@@ -183,6 +204,7 @@ export async function generateJwkAndAddress() {
     throw new Error('WebCrypto not available in this browser context (crypto.subtle missing).')
   }
 
+  const Arweave = (await import('arweave/web')).default
   const arweave = Arweave.init({ host: 'arweave.net', protocol: 'https', port: 443 })
 
   if (debug) {
@@ -210,6 +232,7 @@ export async function generateJwkAndAddress() {
 }
 
 export async function getArBalance(address) {
+  const Arweave = (await import('arweave/web')).default
   const arweave = Arweave.init({ host: 'arweave.net', protocol: 'https', port: 443 })
   try {
     const winston = await arweave.wallets.getBalance(address)
@@ -241,9 +264,11 @@ export async function withRetry(fn, maxRetries = 3, delay = 1000) {
 }
 
 // HyperBEAM client (mainnet with MODE flag)
-export function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk }) {
+export async function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk, publicKey }) {
   installFetchDebug()
-  const signer = createBrowserJwkSigner(jwk)
+  const signer = createBrowserJwkSigner(jwk, publicKey)
+
+  const { connect, dryrun } = await import('@permaweb/aoconnect/browser')
 
   // HyperBEAM uses MODE flag for mainnet
   const ao = connect({
@@ -258,8 +283,9 @@ export function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk }) {
 }
 
 // LegacyNet client (just creates signer - message/result use default nodes)
-export function makeAoClientLegacy({ jwk }) {
+export async function makeAoClientLegacy({ jwk }) {
   installFetchDebug()
+  const { createDataItemSigner } = await import('@permaweb/aoconnect')
   const signer = createDataItemSigner(jwk)
   return { signer }
 }

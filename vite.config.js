@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { visualizer } from 'rollup-plugin-visualizer'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 
 export default defineConfig({
   // Required for deploying under a path prefix like https://arweave.net/<manifestId>/
@@ -20,7 +22,9 @@ export default defineConfig({
       filename: 'bundle-analysis.html',
       gzipSize: true,
       brotliSize: true
-    })
+    }),
+    wasm(),
+    topLevelAwait()
   ],
   optimizeDeps: {
     esbuildOptions: {

@@ -54,7 +54,20 @@ export const initialState = {
         cuUrl: DEFAULTS.CU, // Compute Unit
         tags: [{ name: 'Action', value: 'Info' }],
         data: ''
-    }
+    },
+
+    // MCP Server Hub State
+    mcpRunning: false,
+    mcpHost: 'localhost',
+    mcpPort: 3002,
+    mcpApiKey: null,
+    mcpTools: 34,
+    mcpToolsList: [],
+    mcpClients: [],
+    mcpRequestCount: 0,
+    mcpLogs: [],
+    mcpError: null,
+    mcpConnectedAt: null
 }
 
 const STORAGE_KEY = 'aoprism:state'
@@ -67,7 +80,11 @@ function saveToStorage(state) {
             address: state.address,
             username: state.username,
             activeModule: state.activeModule,
-            network: state.network
+            network: state.network,
+            // MCP Server config
+            mcpHost: state.mcpHost,
+            mcpPort: state.mcpPort,
+            mcpApiKey: state.mcpApiKey
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
     } catch (e) {
@@ -95,8 +112,33 @@ export function getState() {
     return state
 }
 
-export function setState(patch, notify = true) {
+export async function setState(patch, notify = true) {
     const oldState = { ...state }
+
+    // [PHASE 4] Secure Enclave Integration
+    // If JWK is being set, load it into Rust Enclave and strip from state heap
+    if (patch.jwk) {
+        try {
+            const { rustBridge } = await import('./core/rust-bridge.js')
+            const result = await rustBridge.enclaveLoadKey(patch.jwk)
+            console.log('[State] 🛡️ Key moved to Secure Enclave. Result:', result)
+
+            // Result is now an object { address, n }
+            const { address, n } = result
+
+            // Persist encrypted/raw as requested, but remove from active heap
+            localStorage.setItem('aoprism:wallet', JSON.stringify(patch.jwk))
+
+            // Set address and flag, but null out the actual JWK in the state
+            patch.address = address
+            patch.publicKey = n
+            patch.hasKey = true
+            patch.jwk = null
+        } catch (e) {
+            console.error('[State] Failed to load key into enclave:', e)
+        }
+    }
+
     state = { ...state, ...patch }
 
     // Simple shallow comparison to prevent redundant renders
@@ -106,9 +148,8 @@ export function setState(patch, notify = true) {
         listeners.forEach(cb => cb(state))
     }
 
-    // Persist critical fields
-    if (patch.jwk) localStorage.setItem('aoprism:wallet', JSON.stringify(patch.jwk))
-    saveToStorage(state) // Keep existing persistence for other fields
+    // Persist critical fields (excluding raw JWK from general state storage)
+    saveToStorage(state)
 }
 
 export function subscribe(fn) {

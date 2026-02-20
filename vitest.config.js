@@ -4,6 +4,15 @@ export default defineConfig({
     test: {
         environment: 'happy-dom', // Emulate browser APIs (App.js, DOM)
         include: ['src/**/*.test.js', 'src/**/*.spec.js'],
-        setupFiles: [], // Add setup file if needed for localStorage mocks
+        globals: true,
+        coverage: {
+            reporter: ['text', 'json', 'html'],
+            exclude: ['node_modules/', 'dist/', '**/*.test.js', 'tests/', 'scripts/'],
+            thresholds: {
+                lines: 80,
+                functions: 80,
+                branches: 70
+            }
+        }
     },
 })

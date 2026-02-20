@@ -9,6 +9,7 @@
     "preview": "npx serve dist",
     "start": "npm run build && npx serve dist",
     "wallet:new": "node scripts/generate-wallet.mjs",
+    "build:wasm": "wsl bash -c \"export PATH=\\$HOME/.cargo/bin:\\$PATH && wasm-pack build crates/aoprism-crypto --target web\"",
     "deploy": "node scripts/deploy.mjs",
     "deploy:ship": "npm run build && npm run deploy",
     "mcp:dev": "node mcp-platform/src/server.js",
@@ -17,22 +18,32 @@
     "test:backend": "npm test --prefix mcp-platform",
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",
+    "test:qa": "node scripts/qa-runner.js --all --report",
+    "test:qa:unit": "node scripts/qa-runner.js --unit",
+    "test:qa:e2e": "node scripts/qa-runner.js --e2e",
+    "test:coverage": "vitest run --coverage",
     "prepare": "husky"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "happy-dom": "^20.6.3",
     "husky": "^9.1.7",
     "rollup-plugin-visualizer": "^6.0.5",
     "vite": "^7.2.4",
     "vite-plugin-node-polyfills": "^0.25.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0",
     "vitest": "^4.0.18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@permaweb/aoconnect": "^0.0.93",
     "arweave": "^1.15.7",
-    "mime-types": "^3.0.2"
+    "idb": "^8.0.3",
+    "mime-types": "^3.0.2",
+    "reactflow": "^11.11.4"
   }
 }

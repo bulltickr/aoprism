@@ -37,7 +37,10 @@ async function publishSkill() {
 
     try {
         const state = getState()
-        const { ao, signer } = await makeAoClient(state)
+        const { ao, signer } = await makeAoClient({
+            jwk: state.jwk,
+            publicKey: state.publicKey
+        })
 
         // Real Registry Register Call
         /*
