@@ -39,6 +39,7 @@ Cargo.lock
 
 # QA Reports
 tests/reports/
+test-results/
 
 # IDE / Agent Meta
 .gemini

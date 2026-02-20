@@ -132,12 +132,12 @@ function renderSidebar(state) {
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="brand-icon" aria-hidden="true">AO</div>
-        <div class="brand-name">AOPRISM</div>
+        <div class="brand-name">AOPRISM ${state.isGuest ? '<span style="font-size:0.5rem; opacity:0.6; vertical-align:middle;">GUEST</span>' : ''}</div>
       </div>
       <nav class="nav-links" role="tablist">${links}</nav>
       <div class="sidebar-footer" style="padding: 20px;">
         <button id="logout-btn" class="btn btn-ghost" style="width: 100%; color: var(--danger); justify-content: flex-start;" aria-label="Sign out">
-          <span style="font-size: 1.1rem;" aria-hidden="true">󰗽</span> Sign Out
+          <span style="font-size: 1.1rem;" aria-hidden="true">󰗽</span> ${state.isGuest ? 'Connect Wallet' : 'Sign Out'}
         </button>
       </div>
     </aside>
@@ -233,8 +233,8 @@ function renderProfileModal(state) {
 export function renderApp(root) {
   const state = getState()
 
-  // 1. Check Auth State
-  if (!state.jwk) {
+  // 1. Check Auth State - Guard against unauthenticated/non-guest users
+  if (!state.hasKey && !state.isGuest) {
     if (root.dataset.state !== 'auth') {
       root.innerHTML = `
         <div style="height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);">
@@ -242,12 +242,20 @@ export function renderApp(root) {
             <div style="font-size: 3rem; margin-bottom: 24px;">💎</div>
             <h1 style="font-size: 2rem; margin-bottom: 12px; font-weight: 600;">AOPRISM</h1>
             <p class="text-muted" style="margin-bottom: 32px; font-size: 1rem;">Seamless Interface for Decentralized Intelligence.</p>
-            <button id="auth-btn" class="btn btn-primary" style="width: 100%; height: 48px; font-size: 1rem;">Connect Wallet</button>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <button id="auth-btn" class="btn btn-primary" style="width: 100%; height: 48px; font-size: 1rem;">Connect Wallet</button>
+              <button id="guest-btn" class="btn btn-ghost" style="width: 100%; height: 48px; font-size: 1rem;">Continue as Guest</button>
+            </div>
           </div>
         </div>
         <div id="toast-container"></div>
       `
       root.dataset.state = 'auth'
+
+      root.querySelector('#guest-btn').onclick = () => {
+        setState({ isGuest: true, activeModule: 'dashboard' })
+        showToast('Entering Guest Mode', 'info')
+      }
 
       root.querySelector('#auth-btn').onclick = async () => {
         try {
@@ -261,7 +269,6 @@ export function renderApp(root) {
 
           // We need a stable signature for the "Device ID"
           // We'll sign a static message "AOPRISM_DEVICE_LOCK"
-          // This is deterministic for the same JWK, serving as our key material seed.
           const sig = await signMessage(jwk, 'AOPRISM_DEVICE_LOCK')
           const unlocked = await brain.unlock(sig)
 
@@ -271,7 +278,16 @@ export function renderApp(root) {
             console.log("Brain not unlocked (no keys or invalid signature)")
           }
 
-          await setState({ jwk, address, balance, activeModule: 'dashboard', loading: false })
+          // [PHASE 7 FIX] Set hasKey and clear isGuest
+          await setState({
+            isGuest: false,
+            hasKey: true,
+            jwk,
+            address,
+            balance,
+            activeModule: 'dashboard',
+            loading: false
+          })
           showToast('Identity Verified.', 'success')
         } catch (e) {
           console.error(e)
@@ -351,7 +367,8 @@ export function renderApp(root) {
   const logoutBtns = root.querySelectorAll('#logout-btn, #header-logout-btn')
   logoutBtns.forEach(btn => {
     btn.onclick = () => {
-      if (confirm('Disconnect secure session?')) {
+      const msg = state.isGuest ? 'Connect a wallet to enable full features?' : 'Disconnect secure session?'
+      if (confirm(msg)) {
         import('./state.js').then(m => m.resetState())
         root.dataset.state = ''
       }

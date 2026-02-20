@@ -14,6 +14,8 @@ export const initialState = {
     jwk: null,
     address: null,
     username: null,
+    isGuest: false,
+    hasKey: false,
 
     // AO Configuration
     network: 'hyperbeam',
@@ -79,6 +81,8 @@ function saveToStorage(state) {
             jwk: state.jwk,
             address: state.address,
             username: state.username,
+            isGuest: state.isGuest,
+            hasKey: state.hasKey,
             activeModule: state.activeModule,
             network: state.network,
             // MCP Server config

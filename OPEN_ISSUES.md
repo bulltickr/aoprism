@@ -4,10 +4,19 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ## 🔴 High Priority: Architecture & Security
 
-### 1. Social Mesh: Real Data Integration
-- **Current State**: `SocialMesh.js` uses 100% mock data for the feed.
-- **Goal**: Implement real AO Social protocol handlers (Arweave/AO) to fetch and broadcast messages.
-- **Contributor Task**: Research Moltbook or Permaweb Social standards and implement the query logic in `fetchFeed`.
+### 1. E2E Test Suite Failures (28/36)
+- **Status**: Critical integration gaps found during Alpha verification.
+- **Failures**: AI Copilot, Agent Composer, and MCP Server hubs are failing due to canvas/headless rendering and missing environment API keys.
+- **Task**: Fix Playwright environment setup to support canvas interactions and add fallback logic for missing Brain keys.
+
+### 2. Bridge Aggregator: Real API Integration
+- **Current State**: `src/bridge/adapters.js` uses 100% simulation/static logic for quotes.
+- **Goal**: Implement real REST/RPC calls to deBridge, LayerZero, and Across.
+- **Task**: Replace static `calculateQuote` methods with real `fetch()` calls to provider endpoints.
+
+### 3. Social Mesh: Real Data Integration
+- **Current State**: `SocialMesh.js` uses mock data.
+- **Goal**: Implement real AO Social protocol handlers to fetch and broadcast messages.
 
 ### 2. Marketplace: Verified Reputation
 - **Current State**: `Marketplace/reviews.js` is an in-memory simulation.

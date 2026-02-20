@@ -244,6 +244,15 @@ export async function getArBalance(address) {
   }
 }
 
+/**
+ * Sign a simple message using the wallet JWK and Rust-WASM.
+ * Used for Device ID verification and Brain unlocking.
+ */
+export async function signMessage(jwk, data) {
+  const { rustBridge } = await import('./rust-bridge.js')
+  return rustBridge.signPss(jwk, data)
+}
+
 // --- Resilience Utilities ---
 
 /**
