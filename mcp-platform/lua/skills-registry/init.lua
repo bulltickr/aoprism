@@ -4,7 +4,7 @@
 if not Skills then Skills = {} end
 
 -- Owner is the process that can perform admin tasks (like deleting skills)
-Owner = Owner or msg.From
+Owner = Owner or ao.env.Process.Owner
 
 -- Constants
 REGISTRY_VERSION = "0.1.0"

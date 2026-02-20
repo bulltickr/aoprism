@@ -5,6 +5,7 @@ use signature::{Signer, RandomizedSigner, SignatureEncoding};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, aead::Aead};
+use zeroize::{Zeroize, Zeroizing};
 
 #[wasm_bindgen]
 extern "C" {
@@ -12,7 +13,8 @@ extern "C" {
     fn log(s: &str);
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Zeroize)]
+#[zeroize(drop)]
 pub struct Jwk {
     pub n: String,
     pub e: String,
@@ -111,11 +113,11 @@ pub struct LoadKeyResponse {
 pub fn enclave_load_key(jwk_val: JsValue) -> Result<JsValue, JsValue> {
     let jwk: Jwk = serde_wasm_bindgen::from_value(jwk_val)?;
     
-    let n_bytes = URL_SAFE_NO_PAD.decode(&jwk.n).map_err(|_| "Invalid n")?;
-    let e_bytes = URL_SAFE_NO_PAD.decode(&jwk.e).map_err(|_| "Invalid e")?;
-    let d_bytes = URL_SAFE_NO_PAD.decode(&jwk.d).map_err(|_| "Invalid d")?;
-    let p_bytes = URL_SAFE_NO_PAD.decode(&jwk.p).map_err(|_| "Invalid p")?;
-    let q_bytes = URL_SAFE_NO_PAD.decode(&jwk.q).map_err(|_| "Invalid q")?;
+    let mut n_bytes = URL_SAFE_NO_PAD.decode(&jwk.n).map_err(|_| "Invalid n")?;
+    let mut e_bytes = URL_SAFE_NO_PAD.decode(&jwk.e).map_err(|_| "Invalid e")?;
+    let mut d_bytes = URL_SAFE_NO_PAD.decode(&jwk.d).map_err(|_| "Invalid d")?;
+    let mut p_bytes = URL_SAFE_NO_PAD.decode(&jwk.p).map_err(|_| "Invalid p")?;
+    let mut q_bytes = URL_SAFE_NO_PAD.decode(&jwk.q).map_err(|_| "Invalid q")?;
 
     let priv_key = RsaPrivateKey::from_components(
         rsa::BigUint::from_bytes_be(&n_bytes),
@@ -129,6 +131,13 @@ pub fn enclave_load_key(jwk_val: JsValue) -> Result<JsValue, JsValue> {
 
     let mut lock = ACTIVE_KEY.lock().map_err(|_| "Lock poisoned")?;
     *lock = Some(priv_key);
+    
+    // Manual zeroization of temp buffers
+    n_bytes.zeroize();
+    e_bytes.zeroize();
+    d_bytes.zeroize();
+    p_bytes.zeroize();
+    q_bytes.zeroize();
     
     let response = LoadKeyResponse {
         address,
@@ -519,6 +528,9 @@ pub fn decrypt_data(encrypted_val: JsValue, key_bytes: &[u8]) -> Result<String, 
     
     let encrypted: EncryptedData = serde_wasm_bindgen::from_value(encrypted_val)?;
     let iv_bytes = STANDARD.decode(&encrypted.iv).map_err(|_| "Invalid IV")?;
+    if iv_bytes.len() != 12 {
+        return Err(JsValue::from_str("IV must be 12 bytes"));
+    }
     let ciphertext_bytes = STANDARD.decode(&encrypted.ciphertext).map_err(|_| "Invalid Ciphertext")?;
     
     let key = Key::<Aes256Gcm>::from_slice(key_bytes);

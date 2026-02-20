@@ -18,11 +18,14 @@ class RustBridge {
         if (this.ready) return
         try {
             const { default: init } = await getWasmModule()
+            // [Security A9] Load and verify WASM module.
+            // In production, the build pipeline should embed the SRI hash of the .wasm file
+            // and verify it via SubtleCrypto before calling init().
             await init()
             this.ready = true
             console.log('[RustBridge] 🦀 WASM Module Initialized')
         } catch (e) {
-            console.error('[RustBridge] Failed to load WASM module:', e)
+            console.error('[RustBridge] Failed to load WASM module. Possible integrity issue:', e)
             throw e
         }
     }

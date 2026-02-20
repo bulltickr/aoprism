@@ -128,9 +128,24 @@ const ALL_TOOLS = [
  * Register all tools on an McpServer instance.
  * @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server
  */
+const lastExecution = new Map()
+
 export function registerTools(server) {
     for (const tool of ALL_TOOLS) {
         server.tool(tool.name, tool.description, tool.schema.shape, async (args) => {
+            // [A11] Baseline Rate Limiting
+            const now = Date.now()
+            const last = lastExecution.get(tool.name) || 0
+            const THROTTLE_MS = 200 // 5 requests per second per tool
+
+            if (now - last < THROTTLE_MS) {
+                return {
+                    content: [{ type: 'text', text: 'Error: Rate limit exceeded. Please wait.' }],
+                    isError: true
+                }
+            }
+            lastExecution.set(tool.name, now)
+
             try {
                 const data = await tool.handler(args)
                 return {

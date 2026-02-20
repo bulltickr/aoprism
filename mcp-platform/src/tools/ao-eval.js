@@ -8,7 +8,7 @@ import { aoSend } from '../ao-client.js'
 
 export const aoEvalTool = {
     name: 'ao_eval',
-    description: 'Evaluate LUA code directly within an AO process for remote debugging or logic execution.',
+    description: 'Evaluate LUA code directly within an AO process. [CAUTION: This tool allows remote code execution. Use only on processes you control or trust.]',
     schema: z.object({
         process: z.string().describe('The AO process ID to evaluate code in'),
         code: z.string().describe('The LUA code snippet to execute')

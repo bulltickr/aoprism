@@ -78,7 +78,7 @@ export class DeBridgeAdapter extends BridgeAdapter {
     super({
       name: 'deBridge',
       supportedChains: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'avalanche', 'optimism', 'arweave'],
-      apiUrl: 'https://api.debridge.desk/v1.0',
+      apiUrl: 'https://api.debridge.finance/v1.0',
     });
   }
 
@@ -88,7 +88,7 @@ export class DeBridgeAdapter extends BridgeAdapter {
 
     // Try real API first, fallback to calculation
     let toAmount, fee, estimatedTime, slippage;
-    
+
     try {
       const apiResult = await this.fetchQuoteFromApi(params);
       toAmount = apiResult.toAmount;
@@ -150,7 +150,7 @@ export class DeBridgeAdapter extends BridgeAdapter {
     }
 
     const data = await response.json();
-    
+
     return {
       toAmount: data.toAmount || this.calculateQuote(params),
       fee: { fixed: data.fixedFee || 1, percentage: data.priceImpact || 0.1 },
@@ -219,10 +219,10 @@ export class DeBridgeAdapter extends BridgeAdapter {
     // 1. Call deBridge API to get transaction data
     // 2. Sign with user wallet
     // 3. Submit to chain
-    
+
     // For now, return mock tx data
     return {
-      to: '0x...' , // deBridge contract address
+      to: '0x...', // deBridge contract address
       data: '0x...', // encoded call data
       value: quote.fromAmount,
       txHash: `0x${Date.now().toString(16)}`,
@@ -253,7 +253,7 @@ export class LayerZeroAdapter extends BridgeAdapter {
 
     // Try real API first
     let toAmount, fee, estimatedTime, slippage;
-    
+
     try {
       const apiResult = await this.fetchQuoteFromApi(params);
       toAmount = apiResult.toAmount;
@@ -358,7 +358,7 @@ export class AcrossAdapter extends BridgeAdapter {
 
     // Try real API first
     let toAmount, fee, estimatedTime, slippage;
-    
+
     try {
       const apiResult = await this.fetchQuoteFromApi(params);
       toAmount = apiResult.toAmount;
@@ -412,7 +412,7 @@ export class AcrossAdapter extends BridgeAdapter {
 
     const data = await response.json();
     const route = data.routes?.[0];
-    
+
     if (!route) {
       throw new Error('No route found');
     }
@@ -481,7 +481,6 @@ export class AcrossAdapter extends BridgeAdapter {
 
 export function createAdapter(name) {
   switch (name.toLowerCase()) {
-    case 'debridge':
     case 'debridge':
       return new DeBridgeAdapter();
     case 'layerzero':

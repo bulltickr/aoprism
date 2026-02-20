@@ -197,11 +197,13 @@ export async function aoSend({ process: processId, tags = [], data = '', walletP
  * @param {string} [opts.after] - Cursor for pagination
  * @returns {Promise<object[]>} - Array of transaction edges
  */
+const escapeGql = (s) => String(s).replace(/"/g, '\\"')
+
 export async function arweaveQuery({ tags = [], owner, first = 10, after, id }) {
     let query;
     if (id) {
         query = `{
-            transaction(id: "${id}") {
+            transaction(id: "${escapeGql(id)}") {
                 id
                 owner { address }
                 tags { name value }
@@ -213,12 +215,12 @@ export async function arweaveQuery({ tags = [], owner, first = 10, after, id }) 
         const tagFilter = tags.length
             ? `tags: [${tags.map(t => {
                 const vals = t.values || (t.value ? [t.value] : [])
-                return `{name: "${t.name}", values: [${vals.map(v => `"${v}"`).join(', ')}]}`
+                return `{name: "${escapeGql(t.name)}", values: [${vals.map(v => `"${escapeGql(v)}"`).join(', ')}]}`
             }).join(', ')}]`
             : ''
 
-        const ownerFilter = owner ? `owners: ["${owner}"]` : ''
-        const afterFilter = after ? `after: "${after}"` : ''
+        const ownerFilter = owner ? `owners: ["${escapeGql(owner)}"]` : ''
+        const afterFilter = after ? `after: "${escapeGql(after)}"` : ''
 
         query = `{
             transactions(

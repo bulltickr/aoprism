@@ -4,6 +4,26 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ## 🔴 High Priority: Architecture & Security
 
+### 0. SSE Endpoint: Missing Session Validation
+- **Issue**: `mcp-platform/src/server.js` — SSE connections are accepted without any session token check, meaning any local app can connect.
+- **Goal**: Add session token validation before establishing an SSE stream.
+
+### 0b. WASM Module: SRI Integrity Verification
+- **Issue**: `src/core/rust-bridge.js` loads the `.wasm` binary without verifying a Subresource Integrity (SRI) hash. A compromised module could exfiltrate keys silently.
+- **Goal**: Embed the SHA-256 hash of the compiled `.wasm` in the build pipeline and verify it via `SubtleCrypto` before calling `init()`.
+
+### 0c. Dependency Vulnerabilities (`npm audit`)
+- **Issue**: 20 low-severity vulnerabilities exist via the `@permaweb/aoconnect` → `ethers.js` → `elliptic <=6.6.1` chain.
+- **Goal**: Run `npm audit fix` after testing compatibility with the latest `@permaweb/aoconnect`.
+
+### 0d. No ESLint / Prettier Configuration
+- **Issue**: The project has no `.eslintrc` or `.prettierrc`, making code style inconsistent across contributors.
+- **Goal**: Add ESLint + Prettier configs and integrate them into the `npm run dev` / CI pipeline.
+
+### 0e. No `.env.example` File
+- **Issue**: New contributors have no reference for required environment variables, blocking onboarding.
+- **Goal**: Create a `.env.example` listing all required variables with placeholder values and add it to the repo root.
+
 ### 1. E2E Test Suite Failures (Alpha Hardened)
 - **Status**: **RESOLVED for Core Logic**.
 - **Progress**: All 219 frontend vitest and 28 backend vitest tests are passing (100% success rate). 

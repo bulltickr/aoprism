@@ -11,7 +11,7 @@ export class ReviewSystem {
 
   async syncWithAO() {
     if (!this.useAO) return
-    
+
     try {
       const state = {}
       const { ao } = await makeAoClient({
@@ -19,12 +19,12 @@ export class ReviewSystem {
         URL: DEFAULTS.URL,
         SCHEDULER: DEFAULTS.SCHEDULER
       })
-      
+
       const result = await ao.dryrun({
         process: this.aoProcess,
         tags: [{ name: 'Action', value: 'GetReviews' }]
       })
-      
+
       if (result?.Output?.messages) {
         for (const msg of result.Output.messages) {
           try {
@@ -44,7 +44,7 @@ export class ReviewSystem {
 
   async addReview(processId, review) {
     const reviewId = `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const newReview = {
       id: reviewId,
       processId,
@@ -67,14 +67,14 @@ export class ReviewSystem {
     if (!this.reviews.has(processId)) {
       this.reviews.set(processId, []);
     }
-    
+
     this.reviews.get(processId).push(newReview);
-    
+
     // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
-    
+
     return newReview;
   }
 
@@ -86,9 +86,9 @@ export class ReviewSystem {
         URL: DEFAULTS.URL,
         SCHEDULER: DEFAULTS.SCHEDULER
       })
-      
+
       const reviews = this.reviews.get(processId) || []
-      
+
       await ao.message({
         process: this.aoProcess,
         tags: [
@@ -103,43 +103,14 @@ export class ReviewSystem {
       // Data stays in memory cache
     }
   }
-    const reviewId = `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const newReview = {
-      id: reviewId,
-      processId,
-      author: {
-        name: review.author?.name || 'Anonymous',
-        address: review.author?.address || '',
-        avatar: review.author?.avatar || '',
-      },
-      rating: Math.min(5, Math.max(1, review.rating || 3)),
-      title: review.title || '',
-      content: review.content || '',
-      verified: review.verified || false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      helpful: 0,
-      notHelpful: 0,
-      responses: [],
-    };
-
-    if (!this.reviews.has(processId)) {
-      this.reviews.set(processId, []);
-    }
-    
-    this.reviews.get(processId).push(newReview);
-    
-    return newReview;
-  }
 
   async updateReview(processId, reviewId, updates) {
     const processReviews = this.reviews.get(processId);
     if (!processReviews) return null;
-    
+
     const review = processReviews.find(r => r.id === reviewId);
     if (!review) return null;
-    
+
     if (updates.rating !== undefined) {
       review.rating = Math.min(5, Math.max(1, updates.rating));
     }
@@ -149,31 +120,31 @@ export class ReviewSystem {
     if (updates.content !== undefined) {
       review.content = updates.content;
     }
-    
+
     review.updatedAt = new Date().toISOString();
-    
+
     // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
-    
+
     return review;
   }
 
   async deleteReview(processId, reviewId) {
     const processReviews = this.reviews.get(processId);
     if (!processReviews) return false;
-    
+
     const index = processReviews.findIndex(r => r.id === reviewId);
     if (index === -1) return false;
-    
+
     processReviews.splice(index, 1);
-    
+
     // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
-    
+
     return true;
   }
 
@@ -186,7 +157,7 @@ export class ReviewSystem {
   getReview(processId, reviewId) {
     const processReviews = this.reviews.get(processId);
     if (!processReviews) return null;
-    
+
     return processReviews.find(r => r.id === reviewId) || null;
   }
 
@@ -195,7 +166,7 @@ export class ReviewSystem {
     if (!reviews || reviews.length === 0) {
       return { rating: 0, count: 0 };
     }
-    
+
     const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
     return {
       rating: sum / reviews.length,
@@ -206,23 +177,23 @@ export class ReviewSystem {
   getRatingDistribution(processId) {
     const reviews = this.reviews.get(processId);
     const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    
+
     if (!reviews) return distribution;
-    
+
     for (const review of reviews) {
       const rating = Math.round(review.rating);
       if (distribution[rating] !== undefined) {
         distribution[rating]++;
       }
     }
-    
+
     return distribution;
   }
 
   addResponse(processId, reviewId, response) {
     const review = this.getReview(processId, reviewId);
     if (!review) return null;
-    
+
     const newResponse = {
       id: `response-${Date.now()}`,
       author: {
@@ -232,7 +203,7 @@ export class ReviewSystem {
       content: response.content || '',
       createdAt: new Date().toISOString(),
     };
-    
+
     review.responses.push(newResponse);
     return newResponse;
   }
@@ -240,26 +211,26 @@ export class ReviewSystem {
   markHelpful(processId, reviewId) {
     const review = this.getReview(processId, reviewId);
     if (!review) return false;
-    
+
     review.helpful++;
-    
+
     if (this.useAO) {
       this.persistToAO(processId).catch(console.warn)
     }
-    
+
     return true;
   }
 
   markNotHelpful(processId, reviewId) {
     const review = this.getReview(processId, reviewId);
     if (!review) return false;
-    
+
     review.notHelpful++;
-    
+
     if (this.useAO) {
       this.persistToAO(processId).catch(console.warn)
     }
-    
+
     return true;
   }
 
@@ -285,21 +256,21 @@ export class ReviewSystem {
   importReviews(processId, jsonData) {
     try {
       const reviews = JSON.parse(jsonData);
-      
+
       if (!Array.isArray(reviews)) {
         throw new Error('Invalid review data');
       }
-      
+
       if (!this.reviews.has(processId)) {
         this.reviews.set(processId, []);
       }
-      
+
       for (const review of reviews) {
         if (review.id && review.rating) {
           this.reviews.get(processId).push(review);
         }
       }
-      
+
       return { success: true, count: reviews.length };
     } catch (error) {
       return { success: false, error: error.message };

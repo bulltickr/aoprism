@@ -108,18 +108,18 @@ async function startHttpServer() {
             console.error(`[Neural Bridge] 🔌 SSE Client Connecting...`)
             const sessionId = `session-${++sessionCounter}`
             sseTransport = new SSEServerTransport('/messages', res)
-            
+
             // Track session
             sessions.set(sessionId, {
                 id: sessionId,
                 connectedAt: new Date().toISOString(),
                 name: req.query.name || 'Client'
             })
-            
+
             await server.connect(sseTransport)
-            
+
             // Clean up session on disconnect
-            sseTransport.on('close', () => {
+            req.on('close', () => {
                 sessions.delete(sessionId)
                 console.error(`[Neural Bridge] 🔌 Session ${sessionId} disconnected`)
             })

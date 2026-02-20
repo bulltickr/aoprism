@@ -51,6 +51,7 @@ function createBrowserJwkSigner(jwk, publicKey = null) {
 
   // Initialize lazily. 
   const addressPromise = jwk ? jwkToAddress(jwk) : Promise.resolve(null)
+  const httpSigKeyPromise = jwk ? importHttpSigKey(jwk) : Promise.resolve(null)
 
   // Swapped ArweaveSigner for RustSigner (WASM)
   // Passed effectivePublicKey (N modulus string) for Enclave-only mode

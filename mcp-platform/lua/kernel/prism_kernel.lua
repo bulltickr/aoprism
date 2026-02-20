@@ -9,6 +9,7 @@
 ]]
 
 -- GLOBAL STATE
+Owner = Owner or ao.env.Process.Owner
 Kernel = Kernel or {
   Skills = {},     -- Loaded capabilities
   Version = "1.0.0"

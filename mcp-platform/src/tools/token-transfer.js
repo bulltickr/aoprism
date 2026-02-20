@@ -10,9 +10,9 @@ export const tokenTransferTool = {
     name: 'token_transfer',
     description: 'Transfer AO-standard tokens to another address.',
     schema: z.object({
-        token: z.string().describe('The AO process ID of the token contract'),
-        recipient: z.string().describe('The recipient wallet address'),
-        quantity: z.string().describe('The amount of tokens to transfer (as a string to handle decimals)')
+        token: z.string().length(43).regex(/^[A-Za-z0-9_-]+$/).describe('The AO process ID of the token contract'),
+        recipient: z.string().length(43).regex(/^[A-Za-z0-9_-]+$/).describe('The recipient wallet address'),
+        quantity: z.string().regex(/^\d+(\.\d+)?$/).describe('The amount of tokens to transfer (as a string to handle decimals)')
     }),
     handler: async ({ token, recipient, quantity }) => {
         try {

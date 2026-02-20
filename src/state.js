@@ -160,9 +160,10 @@ export async function setState(patch, notify = true) {
             if (state.vaultKey) {
                 const encrypted = await rustBridge.encryptData(patch.jwk, state.vaultKey)
                 localStorage.setItem('aoprism:wallet', JSON.stringify(encrypted))
-            } else {
-                // Fallback to plain-text only if no vaultKey is set (e.g. initial setup)
-                // In production, we should force a vaultKey setup here.
+            } else if (isDebug()) {
+                // In debug mode, we allow it but log a heavy warning.
+                // In production, the key simply won't be persisted if the vault is missing.
+                console.warn('[Security] Plaintext JWK persistence is DISCOURAGED. Setup a vault to enable secure storage.')
                 localStorage.setItem('aoprism:wallet', JSON.stringify(patch.jwk))
             }
 
