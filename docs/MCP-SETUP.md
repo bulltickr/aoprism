@@ -22,12 +22,12 @@ You should see the startup banner printed to stderr:
 ║  Transport:  STDIO                     ║
 ║  AO URL:     https://push.forward.co   ║
 ║  Wallet:     ○ No wallet (read-only)   ║
-║  Tools:      33                        ║
+║  Tools:      37                        ║
 ╠════════════════════════════════════════╣
 ║  • social_post                         ║
 ║  • ao_spawn                            ║
 ║  • ao_inference                        ║
-║  • ... and 30 more                     ║
+║  • ... and 34 more                     ║
 ╚════════════════════════════════════════╝
 ```
 
@@ -44,14 +44,14 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "aoprism": {
       "command": "node",
-      "args": ["/home/q/Desktop/aotest/mcp-platform/src/server.js"],
+      "args": ["/path/to/aoprism/mcp-platform/src/server.js"],
       "env": {}
     }
   }
 }
 ```
 
-Restart Claude Desktop. You should see the 3 AO tools available.
+Restart Claude Desktop. You should see the 37 AO tools available.
 
 ## Enable Write Tools (Wallet Required)
 
@@ -63,7 +63,7 @@ Write tools (`ao_send`) require an Arweave wallet. Two options:
   "mcpServers": {
     "aoprism": {
       "command": "node",
-      "args": ["/home/q/Desktop/aotest/mcp-platform/src/server.js"],
+      "args": ["/path/to/aoprism/mcp-platform/src/server.js"],
       "env": {
         "ARWEAVE_WALLET": "{\"kty\":\"RSA\", ...your JWK here...}"
       }
@@ -79,7 +79,7 @@ Write tools (`ao_send`) require an Arweave wallet. Two options:
     "aoprism": {
       "command": "node",
       "args": [
-        "/home/q/Desktop/aotest/mcp-platform/src/server.js",
+        "/path/to/aoprism/mcp-platform/src/server.js",
         "--wallet=/path/to/wallet.json"
       ]
     }
@@ -93,7 +93,7 @@ Generate a new wallet: `npm run wallet:new` (creates `wallet.json` in project ro
 
 In Cursor settings → MCP → Add server:
 - **Name:** `aoprism`
-- **Command:** `node /home/q/Desktop/aotest/mcp-platform/src/server.js`
+- **Command:** `node /path/to/aoprism/mcp-platform/src/server.js`
 
 ## Test with MCP Inspector
 

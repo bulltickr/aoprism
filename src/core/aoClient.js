@@ -40,9 +40,9 @@ function createBrowserJwkSigner(jwk, publicKey = null) {
   const useEnclave = !jwk
   const effectivePublicKey = publicKey || jwk?.n
 
-  if (useEnclave) {
+  if (useEnclave && isDebug()) {
     console.log('[aoClient] 🛡️ Initializing signer in Enclave-only mode. Effective PK available:', !!effectivePublicKey)
-  } else {
+  } else if (!useEnclave) {
     if (typeof jwk !== 'object') throw new Error('Missing wallet key (jwk).')
     if (!jwk.n || !jwk.e || !jwk.d) throw new Error('Invalid JWK: missing required RSA private key fields.')
   }

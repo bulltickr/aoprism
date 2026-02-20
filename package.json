@@ -1,7 +1,7 @@
 {
   "name": "aoprism",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0-alpha.9",
   "type": "module",
   "scripts": {
     "dev": "vite",

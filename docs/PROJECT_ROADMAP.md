@@ -9,9 +9,9 @@ AOPRISM is a Parallel Reactive Intelligent System Mesh for AO. This roadmap tran
 We have successfully built the "Infinite Terminal" for AO, including:
 
 ### 1. Unified Infrastructure
-- **MCP Server Hub**: Exposes 34 AO tools via a universal model context protocol.
+- **MCP Server Hub**: Exposes 37 AO tools via a universal model context protocol.
 - **Rust Secure Enclave**: Hardware-backed cryptographic security (WASM-based).
-- **AO Client (Toyota Hilux)**: Standardized ANS-104 messaging for HyperBEAM compatibility.
+- **Hardened AO Client**: Standardized ANS-104 messaging for HyperBEAM compatibility.
 
 ### 2. Flagship Features
 - **AI Agent Composer**: Visual drag-and-drop builder for AO agents.

@@ -65,7 +65,7 @@ export const initialState = {
     mcpHost: 'localhost',
     mcpPort: 3002,
     mcpApiKey: null,
-    mcpTools: 34,
+    mcpTools: 37,
     mcpToolsList: [],
     mcpClients: [],
     mcpRequestCount: 0,

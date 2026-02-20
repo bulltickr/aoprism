@@ -70,7 +70,7 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ##  Low Priority: Developer Experience (Good First Issues)
 
-### 1. Hacker Console: Tab Completion
+### 1. Operator Console: Tab Completion
 - **Improvement**: Add auto-complete for `/spawn` and `/eval` using Process IDs stored in the `MemoryVault`.
 
 ### 2. Markdown Post Formatting
@@ -81,6 +81,10 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ### 4. Accessibility (a11y) Audit
 - **Task**: Pass through all components and ensure full keyboard navigation and screen reader support (ARIA 1.2 compliance).
+
+### 5. SkillStore: Formal Registry Pattern
+- **Issue**: `SkillStore.js` uses an ad-hoc registry.
+- **Goal**: Implement a formal registry pattern for hot-swappable agent skills, as noted in the source code TODO.
 
 ---
 *AOPRISM: Building the Neural Network of the Permaweb.*

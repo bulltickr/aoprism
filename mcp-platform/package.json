@@ -1,6 +1,6 @@
 {
     "name": "aoprism",
-    "version": "0.1.0",
+    "version": "1.0.0-alpha.9",
     "description": "Decentralized MCP server for AO/Arweave skills platform",
     "type": "module",
     "main": "src/server.js",
