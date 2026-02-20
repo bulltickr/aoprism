@@ -1,0 +1,49 @@
+{
+  "agent_id": "antigravity-aoprism-v1",
+  "project_context": "AOPRISM: Parallel Reactive Intelligent System Mesh",
+  "version": "1.0.0-hardened",
+  "last_synced": "2026-02-20T10:45:00Z",
+  "verification_status": "PASSED (Stream B Hardened)",
+  "tech_stack": {
+    "frontend": "Vanilla JS / React (Hybrid)",
+    "build_tool": "Vite",
+    "crypto": "Rust-WASM (Arweave RSA-PSS, AES-GCM)",
+    "protocols": [
+      "AO (Arweave Computer)",
+      "MCP (Model Context Protocol)"
+    ],
+    "styling": "Vanilla CSS (Rich Aesthetics)"
+  },
+  "security_protocols": {
+    "vault": "Password-protected AES-GCM encrypted storage for JWKs",
+    "enclave": "Rust-WASM secure key isolation",
+    "sanitization": "HTML escaping for social mesh feeds"
+  },
+  "flagship_features": [
+    {
+      "name": "Agent Composer",
+      "description": "Visual DAG editor for AO agent logic (ReactFlow based)",
+      "path": "src/components/AgentComposer"
+    },
+    {
+      "name": "Social Mesh",
+      "description": "Decentralized social feed on Arweave AO",
+      "path": "src/modules/social"
+    },
+    {
+      "name": "Command Console",
+      "description": "Multi-provider AI assistant with local SLM support",
+      "path": "src/modules/console"
+    },
+    {
+      "name": "MCP Server Hub",
+      "description": "Cross-platform neural bridge for agent-to-tool communication",
+      "path": "mcp-platform"
+    }
+  ],
+  "agent_guidelines": {
+    "state_management": "Use observable pattern in src/state.js. Avoid prop drilling.",
+    "security": "Never log raw JWKs. Use rustBridge for all cryptographic ops.",
+    "logic": "Keep modules decoupled; use dynamic imports for core-libs."
+  }
+}

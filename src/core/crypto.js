@@ -52,6 +52,40 @@ export async function deriveKeyFromSignature(signature, salt) {
 }
 
 /**
+ * Derives a key from a password string using PBKDF2.
+ * @param {string} password - The user-provided password
+ * @param {Uint8Array} salt - Random salt
+ * @returns {CryptoKey}
+ */
+export async function deriveKeyFromPassword(password, salt) {
+    const crypto = getCrypto().subtle
+    const encoder = new TextEncoder()
+
+    // 1. Import Password as Key Material
+    const passwordKey = await crypto.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    )
+
+    // 2. Derive AES Key using PBKDF2
+    return await crypto.deriveKey(
+        {
+            name: 'PBKDF2',
+            hash: 'SHA-256',
+            salt: salt,
+            iterations: 100000
+        },
+        passwordKey,
+        ENC_ALGO,
+        false,
+        ['encrypt', 'decrypt']
+    )
+}
+
+/**
  * Encrypts a JSON object.
  * @param {Object} data - The data to encrypt
  * @param {CryptoKey} key - The derived AES key

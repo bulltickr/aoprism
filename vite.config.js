@@ -3,6 +3,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { visualizer } from 'rollup-plugin-visualizer'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   // Required for deploying under a path prefix like https://arweave.net/<manifestId>/
@@ -23,6 +24,7 @@ export default defineConfig({
       gzipSize: true,
       brotliSize: true
     }),
+    react(),
     wasm(),
     topLevelAwait()
   ],

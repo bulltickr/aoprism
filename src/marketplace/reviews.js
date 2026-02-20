@@ -1,9 +1,108 @@
+import { DEFAULTS } from '../core/config.js'
+import { makeAoClient } from '../core/aoClient.js'
+
 export class ReviewSystem {
-  constructor() {
+  constructor(config = {}) {
     this.reviews = new Map();
+    this.aoProcess = config.aoProcess || DEFAULTS.REGISTRY_ID
+    this.cacheEnabled = config.cacheEnabled !== false
+    this.useAO = config.useAO !== false
   }
 
-  addReview(processId, review) {
+  async syncWithAO() {
+    if (!this.useAO) return
+    
+    try {
+      const state = {}
+      const { ao } = await makeAoClient({
+        jwk: state.jwk,
+        URL: DEFAULTS.URL,
+        SCHEDULER: DEFAULTS.SCHEDULER
+      })
+      
+      const result = await ao.dryrun({
+        process: this.aoProcess,
+        tags: [{ name: 'Action', value: 'GetReviews' }]
+      })
+      
+      if (result?.Output?.messages) {
+        for (const msg of result.Output.messages) {
+          try {
+            const reviewData = JSON.parse(msg.Data || msg.data)
+            if (reviewData.processId && reviewData.rating) {
+              this.reviews.set(reviewData.processId, reviewData.reviews || [])
+            }
+          } catch (e) {
+            // Skip invalid review data
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[ReviewSystem] AO sync failed:', error.message)
+    }
+  }
+
+  async addReview(processId, review) {
+    const reviewId = `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const newReview = {
+      id: reviewId,
+      processId,
+      author: {
+        name: review.author?.name || 'Anonymous',
+        address: review.author?.address || '',
+        avatar: review.author?.avatar || '',
+      },
+      rating: Math.min(5, Math.max(1, review.rating || 3)),
+      title: review.title || '',
+      content: review.content || '',
+      verified: review.verified || false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      helpful: 0,
+      notHelpful: 0,
+      responses: [],
+    };
+
+    if (!this.reviews.has(processId)) {
+      this.reviews.set(processId, []);
+    }
+    
+    this.reviews.get(processId).push(newReview);
+    
+    // Persist to AO
+    if (this.useAO) {
+      await this.persistToAO(processId)
+    }
+    
+    return newReview;
+  }
+
+  async persistToAO(processId) {
+    try {
+      const state = {}
+      const { ao, signer } = await makeAoClient({
+        jwk: state.jwk,
+        URL: DEFAULTS.URL,
+        SCHEDULER: DEFAULTS.SCHEDULER
+      })
+      
+      const reviews = this.reviews.get(processId) || []
+      
+      await ao.message({
+        process: this.aoProcess,
+        tags: [
+          { name: 'Action', value: 'SaveReviews' },
+          { name: 'ProcessId', value: processId }
+        ],
+        data: JSON.stringify({ processId, reviews }),
+        signer
+      })
+    } catch (error) {
+      console.warn('[ReviewSystem] Persist failed:', error.message)
+      // Data stays in memory cache
+    }
+  }
     const reviewId = `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const newReview = {
@@ -34,7 +133,7 @@ export class ReviewSystem {
     return newReview;
   }
 
-  updateReview(processId, reviewId, updates) {
+  async updateReview(processId, reviewId, updates) {
     const processReviews = this.reviews.get(processId);
     if (!processReviews) return null;
     
@@ -53,10 +152,15 @@ export class ReviewSystem {
     
     review.updatedAt = new Date().toISOString();
     
+    // Persist to AO
+    if (this.useAO) {
+      await this.persistToAO(processId)
+    }
+    
     return review;
   }
 
-  deleteReview(processId, reviewId) {
+  async deleteReview(processId, reviewId) {
     const processReviews = this.reviews.get(processId);
     if (!processReviews) return false;
     
@@ -64,6 +168,12 @@ export class ReviewSystem {
     if (index === -1) return false;
     
     processReviews.splice(index, 1);
+    
+    // Persist to AO
+    if (this.useAO) {
+      await this.persistToAO(processId)
+    }
+    
     return true;
   }
 
@@ -132,6 +242,11 @@ export class ReviewSystem {
     if (!review) return false;
     
     review.helpful++;
+    
+    if (this.useAO) {
+      this.persistToAO(processId).catch(console.warn)
+    }
+    
     return true;
   }
 
@@ -140,6 +255,11 @@ export class ReviewSystem {
     if (!review) return false;
     
     review.notHelpful++;
+    
+    if (this.useAO) {
+      this.persistToAO(processId).catch(console.warn)
+    }
+    
     return true;
   }
 
@@ -187,8 +307,8 @@ export class ReviewSystem {
   }
 }
 
-export function createReviewSystem() {
-  return new ReviewSystem();
+export function createReviewSystem(config) {
+  return new ReviewSystem(config);
 }
 
 export default ReviewSystem;

@@ -13,14 +13,13 @@ export class StateAuditor {
 
     /**
      * Audit a process by checking its assignment chain.
-     * In a full production app, this would fetch from the SU.
-     * For this demo, we'll implement a 'Real-Verify' logic that can be tested with mock or real data.
+     * Fetches real assignments from the Scheduler Unit (SU) if none provided.
      */
     async auditProcess(processId, assignments = []) {
         try {
+            // Fetch from SU if no assignments provided
             if (assignments.length === 0) {
-                // Fetch basic assignments if none provided (Simulated SU Fetch)
-                // In Phase 5, we'll fetch from SU_URL/process/{processId}?limit=100
+                assignments = await this.fetchFromSU(processId)
             }
 
             // 1. Verify signatures of each assignment if public key is available
@@ -41,6 +40,44 @@ export class StateAuditor {
         } catch (e) {
             console.error('[Auditor] Audit failed:', e)
             return { status: 'error', error: e.message }
+        }
+    }
+
+    /**
+     * Fetch process assignments from the Scheduler Unit (SU)
+     * @param {string} processId - The AO process ID
+     * @param {number} limit - Number of assignments to fetch
+     * @returns {Promise<Array>} Array of assignments
+     */
+    async fetchFromSU(processId, limit = 100) {
+        try {
+            const suUrl = DEFAULTS.SCHEDULER
+            
+            // SU API endpoint for process assignments
+            // Note: This may vary based on SU implementation
+            const url = `${suUrl.includes('forward.computer') ? 'https://scheduler.aoai.com' : suUrl}/process/${processId}/assignments?limit=${limit}`
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { 
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            
+            if (!response.ok) {
+                throw new Error(`SU fetch failed: ${response.status}`)
+            }
+            
+            const data = await response.json()
+            
+            // Parse assignments from response
+            // Format may vary based on SU implementation
+            return data.assignments || data.messages || []
+        } catch (error) {
+            console.warn('[StateAuditor] SU fetch failed, using fallback:', error.message)
+            // Return empty array to use default mock data
+            return []
         }
     }
 

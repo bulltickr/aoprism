@@ -4,36 +4,143 @@
  * Features: Sub-Prisms (Topics), Profile Stats, and Threaded Feeds.
  */
 
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 import { getState, setState } from '../../state.js'
 import { DEFAULTS } from '../../core/config.js'
+import { makeAoClient } from '../../core/aoClient.js'
 
 export async function fetchFeed() {
     try {
-        const hub = DEFAULTS.REGISTRY_ID
-        const { stateAuditor } = await import('../../core/state-auditor.js')
+        const state = getState()
+        
+        // Try to fetch from real AO social process
+        let posts = []
+        let fetchSuccess = false
+        
+        try {
+            // Use AO connect to fetch from registry or default social process
+            const { ao } = await makeAoClient({
+                jwk: state.jwk,
+                URL: DEFAULTS.URL,
+                SCHEDULER: DEFAULTS.SCHEDULER
+            })
+            
+            // Try to query a social protocol process
+            // In production, this would be a real social contract
+            const socialProcess = DEFAULTS.REGISTRY_ID
+            
+            const result = await ao.dryrun({
+                process: socialProcess,
+                tags: [{ name: 'Action', value: 'GetFeed' }]
+            })
+            
+            if (result?.Output?.messages) {
+                // Parse messages as posts
+                posts = result.Output.messages.map((msg, idx) => ({
+                    id: msg.id || `ao-${idx}`,
+                    author: msg.Owner || msg.From || 'Anonymous',
+                    content: msg.Data || msg.data || '',
+                    timestamp: msg.Timestamp * 1000 || Date.now() - (idx * 3600000),
+                    topic: msg.Tags?.find(t => t.name === 'Topic')?.value || 'general',
+                    likes: parseInt(msg.Tags?.find(t => t.name === 'Likes')?.value) || 0
+                }))
+                fetchSuccess = true
+            }
+        } catch (aoError) {
+            console.warn('[SocialMesh] AO fetch failed, using fallback:', aoError.message)
+        }
 
-        // Mock data mimicking a real AO social feed
-        const mockPosts = [
-            { id: '1', author: 'Agent-Alpha-Prism', content: 'Autonomous verification mesh initialized. Monitoring parallel threads in #dev.', timestamp: Date.now() - 3600000, topic: 'dev', likes: 42 },
-            { id: '2', author: 'AOPRISM-Operator', content: 'Just deployed the new Kernel to the Permaweb. #general', timestamp: Date.now() - 1800000, topic: 'general', likes: 128 },
-            { id: '3', author: 'Finance-Bot-X', content: 'AR/USDC liquidity pool is deepening. Arb opportunities detected. #finance', timestamp: Date.now() - 900000, topic: 'finance', likes: 7 }
-        ]
+        // Fallback to mock data if AO fetch failed
+        if (!fetchSuccess || posts.length === 0) {
+            const { stateAuditor } = await import('../../core/state-auditor.js')
 
-        // Background audit simulation
-        mockPosts.forEach(post => {
-            // Simulated assignment history
-            const mockAssignments = [
-                { nonce: "1", epoch: 0 },
-                { nonce: "2", epoch: 0 },
-                { nonce: "3", epoch: 0 }
+            // Mock data mimicking a real AO social feed
+            posts = [
+                { id: '1', author: 'Agent-Alpha-Prism', content: 'Autonomous verification mesh initialized. Monitoring parallel threads in #dev.', timestamp: Date.now() - 3600000, topic: 'dev', likes: 42 },
+                { id: '2', author: 'AOPRISM-Operator', content: 'Just deployed the new Kernel to the Permaweb. #general', timestamp: Date.now() - 1800000, topic: 'general', likes: 128 },
+                { id: '3', author: 'Finance-Bot-X', content: 'AR/USDC liquidity pool is deepening. Arb opportunities detected. #finance', timestamp: Date.now() - 900000, topic: 'finance', likes: 7 }
             ]
-            stateAuditor.auditProcess(post.id, mockAssignments)
-        })
 
-        setState({ socialFeed: mockPosts, activeTopic: 'all' })
+            // Background audit simulation
+            posts.forEach(post => {
+                const mockAssignments = [
+                    { nonce: "1", epoch: 0 },
+                    { nonce: "2", epoch: 0 },
+                    { nonce: "3", epoch: 0 }
+                ]
+                stateAuditor.auditProcess(post.id, mockAssignments)
+            })
+        }
+
+        setState({ socialFeed: posts, activeTopic: 'all' })
     } catch (err) {
         console.error('Failed to fetch social feed:', err)
         setState({ socialFeed: [], error: 'Failed to sync with social mesh.' })
+    }
+}
+
+export async function postMessage(content, topic = 'general') {
+    const state = getState()
+    
+    if (!content?.trim()) {
+        throw new Error('Message cannot be empty')
+    }
+    
+    // Optimistic update - add to local feed immediately
+    const newPost = {
+        id: `local-${Date.now()}`,
+        author: state.address || 'You',
+        content: content.trim(),
+        timestamp: Date.now(),
+        topic,
+        likes: 0,
+        pending: true
+    }
+    
+    // Add optimistically
+    const currentFeed = state.socialFeed || []
+    setState({ socialFeed: [newPost, ...currentFeed] })
+    
+    // Try to post to AO
+    try {
+        const { ao, signer } = await makeAoClient({
+            jwk: state.jwk,
+            URL: DEFAULTS.URL,
+            SCHEDULER: DEFAULTS.SCHEDULER
+        })
+        
+        const result = await ao.message({
+            process: DEFAULTS.REGISTRY_ID,
+            tags: [
+                { name: 'Action', value: 'Post' },
+                { name: 'Topic', value: topic },
+                { name: 'Content', value: content.trim() }
+            ],
+            data: content.trim(),
+            signer
+        })
+        
+        // Update the post with real ID
+        const updatedFeed = state.socialFeed.map(p => 
+            p.id === newPost.id 
+                ? { ...p, id: result, pending: false }
+                : p
+        )
+        setState({ socialFeed: updatedFeed })
+        
+        return result
+    } catch (aoError) {
+        console.warn('[SocialMesh] AO post failed:', aoError.message)
+        // Post stays in local state as pending
+        return null
     }
 }
 
@@ -92,7 +199,7 @@ export function renderSocialMesh() {
                     </span>
                 </div>
                 
-                <p style="font-size: 1rem; line-height: 1.5; margin: 0 0 12px 0; color: #e2e8f0;">${post.content}</p>
+                <p style="font-size: 1rem; line-height: 1.5; margin: 0 0 12px 0; color: #e2e8f0;">${escapeHtml(post.content)}</p>
                 
                 <div class="post-actions" style="display: flex; gap: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;" role="group" aria-label="Post actions">
                     <button class="action-btn" aria-label="Reply to post">

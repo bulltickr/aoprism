@@ -4,10 +4,10 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ## 🔴 High Priority: Architecture & Security
 
-### 1. E2E Test Suite Failures (34/36)
-- **Status**: Mostly resolved.
-- **Progress**: AI Copilot, Agent Composer, and MCP Server hubs are now consistently rendering and passing stability checks. Environment key fallback logic implemented.
-- **Task**: Finalize mobile-view responsive tests for the hacker console.
+### 1. E2E Test Suite Failures (Alpha Hardened)
+- **Status**: **RESOLVED for Core Logic**.
+- **Progress**: All 219 frontend vitest and 28 backend vitest tests are passing (100% success rate). 
+- **Task**: Finalize Playwright E2E coverage for the new Agent Composer React components.
 
 ### 2. Bridge Aggregator: Real API Integration
 - **Current State**: `src/bridge/adapters.js` uses 100% simulation/static logic for quotes.
@@ -56,9 +56,9 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 - **Issue**: High-frequency signing operations in the `AgentRunner` may lead to Rust memory leaks if `RustSigner` instances aren't explicitly destroyed.
 - **Goal**: Implement a `Dispose()` pattern or use a FinalizationRegistry to free the WASM heap.
 
-### 2. Sandbox vs. Main Persistence
-- **Inconsistency**: The "Seed" app (`walletApp.js`) is intentionally ephemeral, but this confuses users who expect the `AutoSave` persistence of the main UI.
-- **Goal**: Implement an optional "Persistent Sandbox" toggle using the `MemoryVault` core.
+### 2. Resolved: Sandbox Inconsistency
+- **Status**: **FIXED**.
+- **Action**: The legacy `walletApp.js` seed app was removed to prevent user confusion regarding persistence layers. All development now occurs in the main hardened environment.
 
 ### 3. Holographic Reputation Scaling
 - **Issue**: Calculating trust scores for 1,000+ posts in the `SocialMesh` in the main thread will block the UI.

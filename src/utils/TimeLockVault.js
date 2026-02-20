@@ -5,6 +5,7 @@
  */
 
 import { getState, setState } from '../state.js'
+import { brain } from '../modules/console/ConsoleBrain.js'
 
 // Lazy-load rust-bridge so it doesn't evaluate WASM at module init time
 let _rustBridge = null
@@ -205,8 +206,13 @@ class TimeLockVault {
         // [PHASE 7] Clear Rust Enclave (fire-and-forget via lazy import)
         getRustBridge()
             .then(bridge => bridge.enclaveClear())
-            .then(() => console.log('[TimeLock] 🛡️ Rust Secure Enclave cleared'))
-            .catch(e => console.warn('[TimeLock] Failed to clear Rust enclave:', e))
+            .then(() => {
+                console.log('[TimeLock] 🛡️ Rust Secure Enclave cleared')
+                // Also wipe the AI Brain memory
+                brain.wipe()
+                console.log('[TimeLock] 🧠 AI Brain memory wiped')
+            })
+            .catch(e => console.warn('[TimeLock] Failed to clear enclave/brain:', e))
 
         // Clear sensitive fields in JS (synchronous)
         const cleared = {

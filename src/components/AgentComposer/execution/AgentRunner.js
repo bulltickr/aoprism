@@ -73,29 +73,52 @@ export class AgentRunner {
     const queue = [...executionOrder];
     const running = [];
     const completed = new Set();
+    const orderSet = new Set(executionOrder);
 
     while (queue.length > 0 || running.length > 0) {
       if (this.abortController.signal.aborted) break;
 
-      while (running.length < this.options.maxParallel && queue.length > 0) {
-        const nodeId = queue.shift();
-        const node = this.nodes.get(nodeId);
+      // Start tokens that have their dependencies met
+      let startedAny = false;
+      for (let i = 0; i < queue.length; i++) {
+        if (running.length >= this.options.maxParallel) break;
 
-        const promise = this.executeNode(node)
-          .then(() => completed.add(nodeId))
-          .catch((err) => {
-            if (!this.options.continueOnError) throw err;
-          });
+        const nodeId = queue[i];
+        const dependencies = this.edges.filter(e => e.target === nodeId).map(e => e.source);
+        const depsMet = dependencies.every(depId => !orderSet.has(depId) || completed.has(depId));
 
-        running.push(promise);
+        if (depsMet) {
+          queue.splice(i, 1);
+          i--;
+
+          const node = this.nodes.get(nodeId);
+          const promise = this.executeNode(node)
+            .then(() => {
+              completed.add(nodeId);
+              running.splice(running.indexOf(promise), 1);
+            })
+            .catch((err) => {
+              running.splice(running.indexOf(promise), 1);
+              if (!this.options.continueOnError) {
+                this.abortController.abort();
+                throw err;
+              }
+            });
+
+          running.push(promise);
+          startedAny = true;
+        }
       }
 
       if (running.length > 0) {
         await Promise.race(running);
-        const done = running.filter((p) => p);
-        running.splice(0, done.length);
+      } else if (!startedAny && queue.length > 0) {
+        // Should not happen with valid topological order
+        break;
       }
     }
+
+    await Promise.allSettled(running);
   }
 
   async executeNode(node) {
@@ -336,6 +359,19 @@ export class AgentRunner {
 
   getLog() {
     return [...this.executionLog];
+  }
+
+  /**
+   * Securely destroy the runner and wipe sensitive key material.
+   */
+  destroy() {
+    if (this.wallet && typeof this.wallet.wipe === 'function') {
+      this.wallet.wipe();
+    }
+    this.wallet = null;
+    this.results.clear();
+    this.executionLog = [];
+    this.nodes.clear();
   }
 }
 

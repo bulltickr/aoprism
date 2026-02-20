@@ -65,6 +65,13 @@ export function loadWallet(walletPath) {
 }
 
 /**
+ * Clear the cached wallet from memory.
+ */
+export function clearWallet() {
+    _cachedJwk = null
+}
+
+/**
  * Get a signer from the loaded wallet. Throws if no wallet available.
  */
 export function getSigner(walletPath) {
@@ -154,8 +161,8 @@ function getAo() {
  * Send a real message to an AO process and wait for the result.
  */
 export async function aoSend({ process: processId, tags = [], data = '', walletPath }) {
-    const signer = getSigner(walletPath)
     const normalized = normalizeTags(tags)
+    const signer = getSigner(walletPath)
     const ao = getAo()
 
     let messageId

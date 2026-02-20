@@ -32,18 +32,80 @@ const MOCK_ENCRYPTED_BLOB = [
 
 export async function fetchMemories() {
   const state = getState()
-  // In real app: fetch from AO process
-  // const { ao } = await makeAoClient({ URL: state.url })
-  // const res = await ao.dryrun(...) 
+  
+  // Try to fetch from AO process
+  let memories = []
+  let fetchSuccess = false
+  
+  try {
+    const { ao } = await makeAoClient({
+      jwk: state.jwk,
+      URL: state.url,
+      SCHEDULER: state.scheduler
+    })
+    
+    // Fetch from the registry or a dedicated memory process
+    const memoryProcess = state.REGISTRY_ID
+    
+    const result = await ao.dryrun({
+      process: memoryProcess,
+      tags: [{ name: 'Action', value: 'GetMemories' }]
+    })
+    
+    if (result?.Output?.messages) {
+      memories = result.Output.messages.map((msg, idx) => ({
+        id: msg.id || `ao-${idx}`,
+        timestamp: (msg.Timestamp || Date.now() / 1000) * 1000,
+        encrypted: true,
+        preview: '🔒 Encrypted Content',
+        data: msg.Data || msg.data
+      }))
+      fetchSuccess = true
+    }
+  } catch (aoError) {
+    console.warn('[MemoryVault] AO fetch failed:', aoError.message)
+  }
 
-  // For prototype: Load mock encrypted data
-  console.log("MemoryVault: Fetching encrypted state...")
+  // Fallback to mock if AO failed or returned nothing
+  if (!fetchSuccess || memories.length === 0) {
+    console.log("MemoryVault: Using mock encrypted data...")
+    memories = MOCK_ENCRYPTED_BLOB
+  }
 
   // If we are already unlocked, we would decrypt here.
   // For now, just load the raw "blob" into state.
   // We treat state.memories as the *Display* model.
   if (vaultStatus === 'LOCKED') {
-    setState({ memories: MOCK_ENCRYPTED_BLOB })
+    setState({ memories })
+  }
+}
+
+export async function saveMemory(memory) {
+  const state = getState()
+  
+  try {
+    const { ao, signer } = await makeAoClient({
+      jwk: state.jwk,
+      URL: state.url,
+      SCHEDULER: state.scheduler
+    })
+    
+    const memoryProcess = state.REGISTRY_ID
+    
+    await ao.message({
+      process: memoryProcess,
+      tags: [
+        { name: 'Action', value: 'SaveMemory' },
+        { name: 'Memory-Id', value: memory.id }
+      ],
+      data: JSON.stringify(memory),
+      signer
+    })
+    
+    return true
+  } catch (error) {
+    console.warn('[MemoryVault] Save failed:', error.message)
+    return false
   }
 }
 

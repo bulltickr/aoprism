@@ -164,6 +164,7 @@ export class RustSigner {
     }
 
     async sign(message) {
+        if (this._wiped) throw new Error('Signer has been wiped')
         // [PHASE 4] Prefer Enclave signing if initialized
         try {
             return await rustBridge.enclaveSign(message)
@@ -174,6 +175,16 @@ export class RustSigner {
             }
             throw e
         }
+    }
+
+    /**
+     * Explicitly clear sensitive key material from memory.
+     */
+    wipe() {
+        this.jwk = null
+        this.publicKey = null
+        this._publicKey = null
+        this._wiped = true
     }
 
     // Helper to match arbundles internal logic

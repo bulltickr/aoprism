@@ -31,7 +31,59 @@ export class BridgeSecurity {
   }
 
   async verifyContract(quote) {
+    // Try real contract verification via block explorer API
+    try {
+      const contractAddress = quote.contractAddress || quote.toAddress
+      
+      if (!contractAddress) {
+        return false
+      }
+      
+      // Determine chain from quote
+      const chainId = this.getChainIdFromQuote(quote)
+      const explorerApi = this.getExplorerApi(chainId)
+      
+      if (explorerApi) {
+        const response = await fetch(`${explorerApi}/api?module=contract&action=getabi&address=${contractAddress}`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          // If we get a result, the contract exists and is verified
+          return data.status === '1' && data.result !== ''
+        }
+      }
+    } catch (error) {
+      console.warn('[BridgeSecurity] Contract verification failed:', error.message)
+    }
+    
+    // Fallback to local verified contracts list
     return this.verifiedContracts.size > 0;
+  }
+
+  getChainIdFromQuote(quote) {
+    const chainMap = {
+      ethereum: 1,
+      bsc: 56,
+      polygon: 137,
+      arbitrum: 42161,
+      optimism: 10,
+      avalanche: 43114,
+      base: 8453
+    }
+    return chainMap[quote.fromChain] || chainMap[quote.toChain] || 1
+  }
+
+  getExplorerApi(chainId) {
+    const explorers = {
+      1: 'https://api.etherscan.io',
+      56: 'https://api.bscscan.com',
+      137: 'api.polygonscan.com',
+      42161: 'api.arbiscan.io',
+      10: 'api-optimistic.etherscan.io',
+      43114: 'api.snowtrace.io',
+      8453: 'api.basescan.org'
+    }
+    return explorers[chainId]
   }
 
   async checkScamDatabase(quote) {

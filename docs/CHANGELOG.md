@@ -2,6 +2,22 @@
 
 All notable changes to the **AOPRISM** project will be documented in this file.
 
+## [1.0.0-alpha.9] - 2026-02-20
+### 🛡️ Security Hardening (Stream B)
+- **Identity Vault**: Implemented secure Arweave JWK storage with password-based AES-GCM encryption.
+- **XSS Protection**: Added robust HTML sanitization to Social Mesh feeds to prevent script injection.
+- **Dependency Isolation**: Moved core cryptographic operations into a hardened Rust-WASM enclave.
+
+### 🛠️ Fixed
+- **Agent Execution**: Fixed a critical `Promise.race` logic error in `AgentRunner` preventing orphaned tasks and hangs.
+- **AI Parity**: Fully implemented the Anthropic Claude adapter for browser-side AI assistance.
+- **MCP Stability**: Resolved `/health` and `/sessions` endpoint discrepancies in the neural bridge.
+
+### 🧹 Workspace & DevX
+- **Repository Hygiene**: Purged legacy files (`walletApp.js`, `mcp-server`) and consolidated technical reports.
+- **Public Metadata**: Released the `.agent` context file to the public repo for enhanced AI-assisted development.
+- **Documentation**: Relocated Lua developer snippets to `examples/lua/` for improved discoverability.
+
 ## [1.0.0-alpha.8] - 2026-02-20
 ### 🚀 Added
 - **AI Agent Composer (Enhanced)**: Implemented high-fidelity toolbar and professional drag-and-drop node creation.

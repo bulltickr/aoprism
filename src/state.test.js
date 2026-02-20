@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { getState, setState, subscribe, resetState } from './state.js'
 
 describe('State Store', () => {
-    beforeEach(() => {
-        resetState()
+    beforeEach(async () => {
+        await resetState()
     })
 
     it('should initialize with default state', () => {

@@ -18,7 +18,7 @@ const args = process.argv.slice(2)
 const walletArg = args.find(a => a.startsWith('--wallet='))
 const walletPath = walletArg ? walletArg.replace('--wallet=', '') : undefined
 const httpPortArg = args.find(a => a.startsWith('--http-port='))
-const HTTP_PORT = httpPortArg ? parseInt(httpPortArg.replace('--http-port=', '')) : 3000
+const HTTP_PORT = httpPortArg ? parseInt(httpPortArg.replace('--http-port=', '')) : 3002
 
 const wallet = loadWallet(walletPath)
 
@@ -70,13 +70,59 @@ async function startHttpServer() {
 
     app.use(bodyParser.json())
 
+    // Track active sessions
+    const sessions = new Map()
+    let sessionCounter = 0
+
+    // Health check endpoint (A7)
+    app.get('/health', (req, res) => {
+        const toolCount = server.server?.['__toolCount'] || server._registeredTools?.size || 39
+        res.json({
+            status: 'ok',
+            tools: toolCount,
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        })
+    })
+
+    // Sessions endpoint (A8)
+    app.get('/sessions', (req, res) => {
+        const sessionList = Array.from(sessions.values()).map(s => ({
+            id: s.id,
+            connectedAt: s.connectedAt,
+            name: s.name || 'Anonymous'
+        }))
+        res.json({ sessions: sessionList })
+    })
+
+    // Tools listing endpoint
+    app.get('/tools', (req, res) => {
+        const tools = server.server?.['__tools'] || []
+        res.json({ count: tools.length, tools })
+    })
+
     let sseTransport = null
 
     app.get('/sse', async (req, res) => {
         try {
             console.error(`[Neural Bridge] 🔌 SSE Client Connecting...`)
+            const sessionId = `session-${++sessionCounter}`
             sseTransport = new SSEServerTransport('/messages', res)
+            
+            // Track session
+            sessions.set(sessionId, {
+                id: sessionId,
+                connectedAt: new Date().toISOString(),
+                name: req.query.name || 'Client'
+            })
+            
             await server.connect(sseTransport)
+            
+            // Clean up session on disconnect
+            sseTransport.on('close', () => {
+                sessions.delete(sessionId)
+                console.error(`[Neural Bridge] 🔌 Session ${sessionId} disconnected`)
+            })
         } catch (err) {
             console.error('[SSE Error]', err)
             if (!res.headersSent) res.status(500).send('Internal Server Error')

@@ -219,7 +219,35 @@ export class ConsoleBrain {
     }
 
     async callAnthropic(userMsg, systemMsg) {
-        // ... (previous callAnthropic code)
+        const url = 'https://api.anthropic.com/v1/messages'
+        const model = this.model || 'claude-3-opus-20240229'
+
+        this.controller = new AbortController()
+
+        const res = await fetch(url, {
+            method: 'POST',
+            signal: this.controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.key,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: model,
+                system: systemMsg,
+                messages: [
+                    { role: 'user', content: userMsg }
+                ],
+                max_tokens: 4096
+            })
+        })
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            throw new Error(`Anthropic Error: ${err.error?.message || res.statusText}`)
+        }
+        const data = await res.json()
         return data.content[0].text.trim()
     }
 
@@ -250,6 +278,14 @@ export class ConsoleBrain {
         const result = await this.slmRunner.run_matmul(inputs, weights)
 
         return `[Edge Intelligence] 🛡️ Locally Audited Thought: Querying ${tokens.length} verified tokens via WebGPU. 🦀 Rust-WASM Inference: OK. Result: ${result[0].toFixed(2)}`
+    }
+
+    /**
+     * Securely wipe the brain's configuration and API keys from memory.
+     */
+    wipe() {
+        this.apiKey = null
+        this.options = {}
     }
 }
 

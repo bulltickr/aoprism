@@ -84,8 +84,8 @@ export class AgentComposerManager {
     return this.currentAgent;
   }
 
-  loadTemplate(templateId) {
-    const { getTemplate } = require('./templates/index.js');
+  async loadTemplate(templateId) {
+    const { getTemplate } = await import('./templates/index.js');
     const template = getTemplate(templateId);
 
     if (!template) {
@@ -253,7 +253,7 @@ export class AgentComposerManager {
 
     const { AgentRunner } = await import('./execution/AgentRunner.js');
 
-    const runner = new AgentRunner(nodes, edges, state.jwk, {
+    this.runner = new AgentRunner(nodes, edges, state.jwk, {
       onNodeStart: (nodeInfo) => {
         this.updateNodeStatus(nodeInfo.nodeId, 'running');
         window.dispatchEvent(new CustomEvent('aoprism-agent-node-start', { detail: nodeInfo }));
@@ -272,7 +272,7 @@ export class AgentComposerManager {
     });
 
     try {
-      const results = await runner.execute();
+      const results = await this.runner.execute();
 
       setState({
         ...getState(),
@@ -299,6 +299,10 @@ export class AgentComposerManager {
     if (!this.isRunning) return;
 
     this.runner?.stop();
+    if (this.runner && typeof this.runner.destroy === 'function') {
+      this.runner.destroy();
+    }
+    this.runner = null;
     this.isRunning = false;
 
     const state = getState();

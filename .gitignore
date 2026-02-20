@@ -13,6 +13,7 @@ bundle-analysis.html
 node_modules
 dist
 dist-ssr
+docs/research/
 *.local
 
 # Editor directories and files
@@ -43,7 +44,6 @@ test-results/
 
 # IDE / Agent Meta
 .gemini
-.agent
 .claude
 .github/workflows/antigravity.yml
 

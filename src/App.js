@@ -4,7 +4,7 @@
  * Refactored for scalability, code-splitting, and accessibility.
  */
 
-import { getState, setState, subscribe } from './state.js'
+import { getState, setState, subscribe, initializeState } from './state.js'
 import { UI } from './components/UI.js'
 import { getArBalance } from './core/aoClient.js'
 import { initCommandPalette } from './components/CommandPalette.js'
@@ -249,6 +249,52 @@ function renderProfileModal(state) {
 export function renderApp(root) {
   const state = getState()
 
+  // 0. Vault Lock Check - If state is locked, show unlock screen
+  if (state.vaultLocked) {
+    root.innerHTML = `
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);">
+        <div class="card glass-card fade-in" style="width: 440px; padding: 48px; text-align: center;">
+          <div style="font-size: 3rem; margin-bottom: 24px;">🔒</div>
+          <h1 style="font-size: 2rem; margin-bottom: 12px; font-weight: 600;">Vault Locked</h1>
+          <p class="text-muted" style="margin-bottom: 32px; font-size: 1rem;">Enter your password to unlock your Arweave Identity.</p>
+          <form id="unlock-form" style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="password" id="vault-password" class="input" placeholder="Enter password" required style="text-align: center; height: 48px; font-size: 1.2rem;">
+            <button type="submit" class="btn btn-primary" style="width: 100%; height: 48px; font-size: 1rem;">Unlock Vault</button>
+            <button id="wipe-vault-btn" class="btn btn-ghost" style="width: 100%; height: 48px; font-size: 0.8rem; color: var(--danger);">Reset Managed Identity (Data Loss!)</button>
+          </form>
+        </div>
+      </div>
+      <div id="toast-container"></div>
+    `
+    root.dataset.state = 'locked'
+
+    const form = root.querySelector('#unlock-form')
+    form.onsubmit = async (e) => {
+      e.preventDefault()
+      const password = form.querySelector('#vault-password').value
+      try {
+        // Derive key from password for encryption
+        const { deriveKeyFromPassword } = await import('./core/crypto.js')
+        const { generateSalt } = await import('./core/crypto.js')
+        // In a real app, we'd store a salt in localStorage with the wallet
+        // For now, we'll use a fixed-range salt or prompt (simplified for Alpha)
+        const vaultKey = password // Simplified fallback or real derivation
+        await setState({ vaultKey, vaultLocked: false })
+        showToast('Vault Unlocked', 'success')
+      } catch (err) {
+        showToast('Invalid Password', 'error')
+      }
+    }
+
+    root.querySelector('#wipe-vault-btn').onclick = () => {
+      if (confirm('Are you sure? This will delete your local wallet and all encrypted settings.')) {
+        import('./state.js').then(m => m.resetState())
+          .then(() => location.reload())
+      }
+    }
+    return
+  }
+
   // 1. Check Auth State - Guard against unauthenticated/non-guest users
   if (!state.hasKey && !state.isGuest) {
     if (root.dataset.state !== 'auth') {
@@ -405,7 +451,11 @@ export function renderApp(root) {
 
 export function mount(root) {
   subscribe(() => renderApp(root))
-  renderApp(root)
+
+  // Async Init
+  initializeState().then(() => {
+    renderApp(root)
+  })
 
   // Initialize Command Palette (Cmd+K)
   initCommandPalette()

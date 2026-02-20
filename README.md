@@ -38,7 +38,7 @@ A web-based interface for manual orchestration.
 
 ### 2. The Neural Bridge (MCP Server)
 A dedicated bridge that exposes the AO Protocol to AI models via the **Model Context Protocol**.
-*   **Active Capabilities**: 35 specialized tools for blockchain and agent orchestration.
+*   **Active Capabilities**: 37 specialized tools for blockchain and agent orchestration.
 
 | Tool Name | Purpose |
 | :--- | :--- |
@@ -107,7 +107,7 @@ AOPRISM follows strict engineering rigor:
 *   **Backend**: 100% Test Coverage on MCP Tools (28/28 passed).
 *   **Frontend**: Vitest unit testing for core logic.
 *   **E2E**: Playwright validation for critical user journeys.
-*   **Audit Status**: ✅ PASSED (Feb 2026).
+*   **Verification Status**: ✅ Verified (Internal Leak Audit - Feb 2026).
 
 ---
 
@@ -128,12 +128,12 @@ AOPRISM follows strict engineering rigor:
 
 AOPRISM is a high-performance, security-hardened toolkit for the AO ecosystem, now featuring a full suite of flagship developer tools:
 
-1.  **AI Agent Composer**: A visual, drag-and-drop builder for composing complex AO agents using directed acyclic graphs (DAGs). Execute processes in parallel with a production-grade execution engine. Featuring professional node management and persistence.
+1.  **AI Agent Composer**: A visual, drag-and-drop builder for composing complex AO agents using directed acyclic graphs (DAGs). Execute processes in parallel with a topological execution engine. Featuring workspace persistence and Lua export.
 2.  **AI Copilot**: An intelligent AO assistant for real-time code generation, intelligent debugging, and automated security auditing of Lua contracts.
 3.  **AO Testing Framework**: A native, frontend-based testing environment for AO processes. Supports `describe`/`it` blocks, mocking, and dry-run execution.
 4.  **Process Marketplace 2.0**: A rich ecosystem of AO skills with advanced metadata, dependency resolution, versioning, and verified participant reviews.
 5.  **Cross-Chain Bridge (Simulation)**: A unified multi-bridge aggregator (deBridge, LayerZero, Across) for visual liquidity routing between Arweave and the broader DeFi landscape. **IMPORTANT: Currently implemented as a high-fidelity UX simulation for Alpha—no real transactions are executed.**
-6.  **MCP Server Hub**: Exposes 34+ AO tools to the universal Model Context Protocol, allowing any AI assistant to interact with AO natively.
+6.  **MCP Server Hub**: Exposes 37 specialized AO tools to the universal Model Context Protocol, allowing any AI assistant to interact with AO natively.
 
 ## 🛠️ Getting Started
 
@@ -172,7 +172,7 @@ npm run deploy:ship
 ---
 
 ## � Documentation
-*   [**Roadmap**](./docs/ROADMAP.md) - See our future plans (Monitor Agents, Mobile App).
+*   [**Roadmap**](./docs/PROJECT_ROADMAP.md) - See our future plans (Monitor Agents, Mobile App).
 *   [**MCP Setup**](./docs/MCP-SETUP.md) - Guide for connecting Claude Desktop.
 *   [**Lua Snippets**](./docs/snippets/) - Copy-paste code for your agents.
 
@@ -180,7 +180,7 @@ npm run deploy:ship
 
 ## 🤝 Contributing
 AOPRISM is open-source and community-driven.
-*   **Found a bug?** Check [OPEN_ISSUES.md](./OPEN_ISSUES.md) or open an Issue.
+*   **Found a bug?** Check [OPEN_ISSUES.md](./docs/OPEN_ISSUES.md) or open an Issue.
 *   **Want to build a Skill?** Submit a PR to `src/ao/skills/`.
 
 ## ⚖️ License
