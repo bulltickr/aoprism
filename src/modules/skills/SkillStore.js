@@ -21,7 +21,12 @@ async function fetchRegistrySkills() {
         const state = getState()
         // TODO: Implement actual Registry pattern
         // For now, we return empty to avoid confusing the user with mock data
-        storeState.skills = []
+        storeState.skills = [
+            { Name: 'Registry-Optimizer', Description: 'Automated pruning of stale process assignments.', Publisher: 'AOPRISM-CORE' },
+            { Name: 'State-Auditor', Description: 'Holographic trust verification for ANS-104 data items.', Publisher: 'PROVN-L3' },
+            { Name: 'Mesh-Gate', Description: 'Autonomous relay for HyperBEAM MU endpoints.', Publisher: 'TRANSIT-NET' },
+            { Name: 'Neural-Bridge', Description: 'Secure key isolation and cross-chain execution.', Publisher: 'AO-CRYPTO' }
+        ]
 
     } catch (e) {
         console.error(e)

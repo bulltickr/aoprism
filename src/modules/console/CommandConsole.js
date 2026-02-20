@@ -110,6 +110,7 @@ export async function executeCommand(cmd, args) {
                     '  /autodev <p> <txt>   - Generate & Deploy Logic',
                     '',
                     '🔧 UTILITIES',
+                    '  /bridge [con|stat|test] - Bridge Gateway connectivity',
                     '  /whoami              - Current Identity',
                     '  /network             - Gateway Status',
                     '  /history             - Command Log',
@@ -240,7 +241,7 @@ export async function executeCommand(cmd, args) {
                 return `Output:\n${res.Output?.data || 'No output'}`
 
             case '/ping':
-                if (!args[0]) throw new Error('Usage: /ping <pid>')
+                if (!args[0]) throw new Error('Usage: /ping <process_id>')
                 await ao.message({
                     process: args[0],
                     tags: [{ name: 'Action', value: 'Ping' }],

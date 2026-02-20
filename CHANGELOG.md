@@ -2,17 +2,15 @@
 
 All notable changes to the **AOPRISM** project will be documented in this file.
 
-## [1.0.0-alpha.7] - 2026-02-20
+## [1.0.0-alpha.8] - 2026-02-20
 ### 🚀 Added
-- **AI Agent Composer**: Visual builder for AO agents.
-- **AI Copilot**: intelligent dev assistant with Lua code generation.
-- **AO Testing Framework**: Standardized test suite for contracts.
-- **Process Marketplace**: Enhanced skill discovery and reviews.
-- **Cross-Chain Bridge**: Multi-bridge aggregator (deBridge, LayerZero).
-- **Rust Secure Enclave**: Hardware-backed signing and memory isolation.
-- **MCP Tool Hub**: Exposed 3 new tools (`ao_test`, `ao_bridge`, `ao_agent_execute`) for full AI-native parity.
-- **Documentation**: Condensed Roadmap to a 1-page vision doc and expanded Open Issues with 15+ architectural debt items.
-- **Production Build**: Verified 8.7MB optimized production bundle.
+- **AI Agent Composer (Enhanced)**: Implemented high-fidelity toolbar and professional drag-and-drop node creation.
+
+### 🛠️ Fixed
+- **App Shell Stability**: Implemented guards in `App.js` to prevent redundant DOM overwrites and state loss for self-managing modules.
+- **Composition Engine**: Refactored `ComposerUI.jsx` with robust React root management to eliminate loading race conditions.
+- **Bridge Precision**: Corrected property mapping in `BridgeUI.js` for accurate cross-chain quote displays.
+- **Console Parity**: Updated `/help` to include the `/bridge` command.
 
 ### 🛠️ Fixed
 - **WASM Loading**: Resolved `ECONNREFUSED` issues via lazy evaluation.

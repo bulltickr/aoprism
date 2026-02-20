@@ -29,6 +29,7 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const reactFlowWrapper = useRef(null);
 
   const onConnect = useCallback(
@@ -44,6 +45,48 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
       onChange?.({ nodes, edges: [...edges, newEdge] });
     },
     [nodes, edges, onChange]
+  );
+
+  const onInit = useCallback((instance) => {
+    setReactFlowInstance(instance);
+  }, []);
+
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+      const type = event.dataTransfer.getData('application/reactflow');
+
+      // check if the dropped element is valid
+      if (typeof type === 'undefined' || !type) {
+        return;
+      }
+
+      const position = reactFlowInstance.project({
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      });
+
+      const newNode = {
+        id: `${type}-${Date.now()}`,
+        type,
+        position,
+        data: {
+          label: type === 'process' ? 'AO Process' : type === 'trigger' ? 'Trigger' : 'Action',
+          status: 'idle',
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      onChange?.({ nodes: [...nodes, newNode], edges });
+    },
+    [reactFlowInstance, nodes, edges, onChange, setNodes]
   );
 
   const onNodeClick = useCallback((event, node) => {
@@ -66,7 +109,12 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
     };
     setNodes((nds) => [...nds, newNode]);
     onChange?.({ nodes: [...nodes, newNode], edges });
-  }, [nodes, edges, onChange]);
+  }, [nodes, edges, onChange, setNodes]);
+
+  const onDragStart = (event, nodeType) => {
+    event.dataTransfer.setData('application/reactflow', nodeType);
+    event.dataTransfer.effectAllowed = 'move';
+  };
 
   const deleteNode = useCallback((nodeId) => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -78,7 +126,7 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
       nodes: nodes.filter((n) => n.id !== nodeId),
       edges: edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
     });
-  }, [nodes, edges, selectedNode, onChange]);
+  }, [nodes, edges, selectedNode, onChange, setNodes, setEdges]);
 
   const updateNodeData = useCallback((nodeId, newData) => {
     setNodes((nds) =>
@@ -87,16 +135,19 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
     if (selectedNode?.id === nodeId) {
       setSelectedNode((prev) => ({ ...prev, data: { ...prev.data, ...newData } }));
     }
-  }, [selectedNode]);
+  }, [selectedNode, setNodes]);
 
   return (
-    <div className="agent-composer" style={{ width: '100%', height: '100vh' }} ref={reactFlowWrapper}>
+    <div className="agent-composer" style={{ width: '100%', height: '100%' }} ref={reactFlowWrapper}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onInit={onInit}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
@@ -126,7 +177,31 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
         />
         <Panel position="top-left" className="composer-toolbar">
           <div className="toolbar-section">
-            <h4>Add Nodes</h4>
+            <h4>Add Nodes (Drag)</h4>
+            <div
+              className="dnd-node trigger"
+              onDragStart={(event) => onDragStart(event, 'trigger')}
+              draggable
+            >
+              Trigger
+            </div>
+            <div
+              className="dnd-node process"
+              onDragStart={(event) => onDragStart(event, 'process')}
+              draggable
+            >
+              Process
+            </div>
+            <div
+              className="dnd-node action"
+              onDragStart={(event) => onDragStart(event, 'action')}
+              draggable
+            >
+              Action
+            </div>
+          </div>
+          <div className="toolbar-section">
+            <h4>Quick Add</h4>
             <button className="btn btn-primary" onClick={() => addNode('trigger')}>
               + Trigger
             </button>

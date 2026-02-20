@@ -77,7 +77,7 @@ export class DeBridgeAdapter extends BridgeAdapter {
   constructor() {
     super({
       name: 'deBridge',
-      supportedChains: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'avalanche', 'optimism'],
+      supportedChains: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'avalanche', 'optimism', 'arweave'],
       apiUrl: 'https://api.debridge.desk/v1.0',
     });
   }
@@ -152,7 +152,7 @@ export class LayerZeroAdapter extends BridgeAdapter {
   constructor() {
     super({
       name: 'LayerZero',
-      supportedChains: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'avalanche', 'optimism', 'base'],
+      supportedChains: ['ethereum', 'bsc', 'polygon', 'arbitrum', 'avalanche', 'optimism', 'base', 'arweave'],
       apiUrl: 'https://api.layerzero.network',
     });
   }

@@ -18,7 +18,9 @@ const renderers = {
   skills: null,
   console: null,
   memory: null,
-  wallet: null
+  wallet: null,
+  bridge: null,
+  composer: null
 }
 
 const eventAttachmenets = {
@@ -26,7 +28,9 @@ const eventAttachmenets = {
   skills: null,
   memory: null,
   console: null,
-  wallet: null
+  wallet: null,
+  bridge: null,
+  composer: null
 }
 
 async function loadModule(name) {
@@ -69,6 +73,16 @@ async function loadModule(name) {
         renderers.wallet = module.renderDevWallet
         eventAttachmenets.wallet = module.attachDevEvents
         break
+      case 'bridge':
+        module = await import('./modules/bridge/BridgeUI.js')
+        renderers.bridge = module.renderBridge
+        eventAttachmenets.bridge = module.attachBridgeEvents
+        break
+      case 'composer':
+        module = await import('./modules/composer/ComposerUI.jsx')
+        renderers.composer = module.renderComposer
+        eventAttachmenets.composer = module.attachComposerEvents
+        break
     }
   } catch (err) {
     console.error(`Failed to load module ${name}:`, err)
@@ -110,9 +124,11 @@ function renderSidebar(state) {
     { id: 'dashboard', label: 'Dashboard', icon: '󰕒' },
     { id: 'analytics', label: 'Analytics', icon: '📊' },
     { id: 'social', label: 'Social Mesh', icon: '󰭹' },
+    { id: 'composer', label: 'Agent Composer', icon: '󰖂' },
     { id: 'skills', label: 'Skill Hub', icon: '󰈙' },
     { id: 'console', label: 'Console', icon: '󰆍' },
     { id: 'memory', label: 'Memory', icon: '󰆼' },
+    { id: 'bridge', label: 'Bridge', icon: '󰆟' },
     { id: 'wallet', label: 'Dev Tools', icon: '󰆧' }
   ]
 
@@ -339,9 +355,14 @@ export function renderApp(root) {
       root.dataset.module = state.activeModule
     })
   } else {
-    content.innerHTML = renderActiveModule(state)
-    const attacher = eventAttachmenets[state.activeModule]
-    if (attacher) attacher(root)
+    // If the module is already active, only re-render if it's NOT a complex module
+    // that manages its own state (like Composer or Console with React/Persistence)
+    const selfManagingModules = ['composer', 'console', 'bridge']
+    if (!selfManagingModules.includes(state.activeModule)) {
+      content.innerHTML = renderActiveModule(state)
+      const attacher = eventAttachmenets[state.activeModule]
+      if (attacher) attacher(root)
+    }
   }
 
   // Event Delegation and Binding (simplified for demo)

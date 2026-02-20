@@ -1,6 +1,11 @@
-export { BridgeAdapter, DeBridgeAdapter, LayerZeroAdapter, AcrossAdapter, createAdapter } from './adapters.js';
-export { BridgeAggregator, createBridgeAggregator } from './aggregator.js';
-export { BridgeSecurity, createBridgeSecurity } from './security.js';
+
+import { BridgeAdapter, DeBridgeAdapter, LayerZeroAdapter, AcrossAdapter, createAdapter } from './adapters.js';
+import { BridgeAggregator, createBridgeAggregator } from './aggregator.js';
+import { BridgeSecurity, createBridgeSecurity } from './security.js';
+
+export { BridgeAdapter, DeBridgeAdapter, LayerZeroAdapter, AcrossAdapter, createAdapter };
+export { BridgeAggregator, createBridgeAggregator };
+export { BridgeSecurity, createBridgeSecurity };
 
 export class CrossChainBridge {
   constructor() {
@@ -9,9 +14,6 @@ export class CrossChainBridge {
   }
 
   initialize() {
-    const { createBridgeAggregator } = require('./aggregator.js');
-    const { createBridgeSecurity } = require('./security.js');
-
     this.aggregator = createBridgeAggregator();
     this.security = createBridgeSecurity();
 

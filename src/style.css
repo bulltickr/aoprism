@@ -1385,3 +1385,58 @@ body {
   border-radius: 8px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
+
+/* Agent Composer Enhancements */
+.composer-toolbar {
+  background: var(--glass-bg);
+  backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px;
+  width: 200px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.toolbar-section h4 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.dnd-node {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.85rem;
+  cursor: grab;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.dnd-node:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary);
+  transform: translateX(4px);
+}
+
+.dnd-node:active {
+  cursor: grabbing;
+}
+
+.dnd-node.trigger { border-left: 3px solid var(--success); }
+.dnd-node.process { border-left: 3px solid var(--primary); }
+.dnd-node.action  { border-left: 3px solid var(--warning); }
+
+.composer-toolbar .btn {
+  width: 100%;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}

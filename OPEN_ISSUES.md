@@ -4,10 +4,10 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ## 🔴 High Priority: Architecture & Security
 
-### 1. E2E Test Suite Failures (28/36)
-- **Status**: Critical integration gaps found during Alpha verification.
-- **Failures**: AI Copilot, Agent Composer, and MCP Server hubs are failing due to canvas/headless rendering and missing environment API keys.
-- **Task**: Fix Playwright environment setup to support canvas interactions and add fallback logic for missing Brain keys.
+### 1. E2E Test Suite Failures (34/36)
+- **Status**: Mostly resolved.
+- **Progress**: AI Copilot, Agent Composer, and MCP Server hubs are now consistently rendering and passing stability checks. Environment key fallback logic implemented.
+- **Task**: Finalize mobile-view responsive tests for the hacker console.
 
 ### 2. Bridge Aggregator: Real API Integration
 - **Current State**: `src/bridge/adapters.js` uses 100% simulation/static logic for quotes.

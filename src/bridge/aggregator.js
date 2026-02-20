@@ -42,7 +42,7 @@ export class BridgeAggregator {
           if (!adapter.isChainSupported(params.fromChain) || !adapter.isChainSupported(params.toChain)) {
             return null;
           }
-          
+
           const quote = await adapter.getQuote(params);
           return {
             adapter: adapter.name,
@@ -72,11 +72,13 @@ export class BridgeAggregator {
   }
 
   calculateScore(quote) {
-    const amount = parseFloat(quote.quote.toAmount) || 0;
-    const fromAmount = parseFloat(quote.quote.fromAmount) || 1;
-    const fee = quote.quote.fee || {};
-    const time = quote.quote.estimatedTime || 60;
-    const slippage = quote.quote.slippage || 0;
+    // Both raw quote and wrapped result might be passed, handle both
+    const q = quote.quote || quote;
+    const amount = parseFloat(q.toAmount) || 0;
+    const fromAmount = parseFloat(q.fromAmount) || 1;
+    const fee = q.fee || {};
+    const time = q.estimatedTime || 60;
+    const slippage = q.slippage || 0;
 
     const receiveScore = fromAmount > 0 ? amount / fromAmount : 0;
     const feeScore = fromAmount > 0 ? 1 - ((fee.fixed || 0) / fromAmount) - (fee.percentage || 0) / 100 : 0;
@@ -89,7 +91,7 @@ export class BridgeAggregator {
   async executeBestQuote(params, wallet) {
     const best = await this.findBestQuote(params);
     const adapter = this.adapters.find(a => a.name === best.adapter);
-    
+
     if (!adapter) {
       throw new Error(`Adapter ${best.adapter} not found`);
     }
