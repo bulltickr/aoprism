@@ -3,12 +3,19 @@ import { Handle, Position } from 'reactflow';
 
 export function ActionNode({ data, selected }) {
   return (
-    <div className={`action-node ${selected ? 'selected' : ''}`}>
+    <div 
+      className={`action-node ${selected ? 'selected' : ''}`}
+      role="article"
+      aria-label={`Action node: ${data.label}`}
+      aria-selected={selected}
+    >
       <div className="node-header">
-        <span className="icon">🔔</span>
+        <span className="icon" aria-hidden="true">🔔</span>
         <span className="title">{data.label}</span>
         {data.status && (
-          <span className={`status-badge ${data.status}`}>{data.status}</span>
+          <span className={`status-badge ${data.status}`} aria-label={`Status: ${data.status}`}>
+            {data.status}
+          </span>
         )}
       </div>
       
@@ -47,6 +54,7 @@ export function ActionNode({ data, selected }) {
         position={Position.Top}
         id="input"
         style={{ background: '#f59e0b' }}
+        aria-label="Action input connection"
       />
     </div>
   );

@@ -123,7 +123,7 @@ export function renderAnalytics() {
                          <span style="font-size:1.5rem;">🌐</span>
                          <span style="color:var(--danger); font-size:0.85rem; background:rgba(248,113,113,0.1); padding:2px 8px; border-radius:12px;">-2%</span>
                     </div>
-                    <div style="font-size:1.8rem; font-weight:700; margin-bottom:4px;">1.2</div>
+                    <div style="font-size:1.8rem; font-weight:700; margin-bottom:4px;">${state.networkStats?.tps || 'N/A'}</div>
                     <div style="font-size:0.85rem; color:var(--text-muted);">Network TPS</div>
                 </div>
             </div>
@@ -133,7 +133,7 @@ export function renderAnalytics() {
                 <div class="card glass-card" style="padding:24px; display:flex; flex-direction:column;">
                     <h3 style="margin:0 0 24px 0;">Network Activity</h3>
                     <div style="flex:1; display:flex; align-items:flex-end; gap:16px; min-height:150px;">
-                        ${[40, 60, 45, 80, 55, 30, 90, 65, 75, 50, 85, 95].map(h => `
+                        ${(state.networkStats?.activity || Array(12).fill(50)).map(h => `
                             <div style="flex:1; height:${h}%; background:linear-gradient(to top, var(--primary), #a855f7); opacity:0.8; border-radius:4px 4px 0 0;"></div>
                         `).join('')}
                     </div>

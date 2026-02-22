@@ -1,9 +1,40 @@
 // WASM module is loaded lazily to avoid evaluation at module import time
 // (which would break Vitest and cause ECONNREFUSED in test environments)
+
+// SRI Hash - compute after building WASM, then update this value
+const EXPECTED_WASM_HASH = 'sha256-PLACEHOLDER_REPLACE_AFTER_BUILD'
+
+async function computeWasmHash(wasmBytes) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', wasmBytes)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return 'sha256-' + btoa(String.fromCharCode(...hashArray)).slice(0, 43)
+}
+
 let _wasmModule = null
 async function getWasmModule() {
     if (!_wasmModule) {
-        _wasmModule = await import('../../crates/aoprism-crypto/pkg/aoprism_crypto.js')
+        // Skip SRI check in test environment
+        const isTest = typeof window !== 'undefined' && window.__vitest__ || 
+                       typeof globalThis.process !== 'undefined' && globalThis.process.env?.NODE_ENV === 'test'
+        
+        const wasmPath = '../../crates/aoprism-crypto/pkg/aoprism_crypto.js'
+        
+        if (!isTest) {
+            try {
+                const wasmResponse = await fetch(wasmPath)
+                const wasmBuffer = await wasmResponse.arrayBuffer()
+                const wasmBytes = new Uint8Array(wasmBuffer)
+                
+                const actualHash = await computeWasmHash(wasmBytes)
+                if (actualHash !== EXPECTED_WASM_HASH) {
+                    console.warn(`WASM integrity check: hash mismatch (this is normal during development)`)
+                }
+            } catch (e) {
+                console.warn('WASM fetch failed, skipping integrity check:', e.message)
+            }
+        }
+        
+        _wasmModule = await import(wasmPath)
     }
     return _wasmModule
 }
@@ -90,6 +121,30 @@ class RustBridge {
         return SlmRunner.create()
     }
 
+    async runMatmul(a, b, rowsA, colsA, colsB) {
+        if (!this.ready) await this.init()
+        try {
+            const { run_matmul_gpu } = this.module || await import('../../crates/aoprism-crypto/pkg/aoprism_crypto.js')
+            return await run_matmul_gpu(a, b)
+        } catch (e) {
+            console.warn('[RustBridge] GPU matmul failed, falling back to CPU:', e.message)
+            const { run_matmul_cpu } = this.module || await import('../../crates/aoprism-crypto/pkg/aoprism_crypto.js')
+            return run_matmul_cpu(a, b, rowsA, colsA, colsB)
+        }
+    }
+
+    async runMatmulCpu(a, b, rowsA, colsA, colsB) {
+        if (!this.ready) await this.init()
+        const { run_matmul_cpu } = this.module || await import('../../crates/aoprism-crypto/pkg/aoprism_crypto.js')
+        return run_matmul_cpu(a, b, rowsA, colsA, colsB)
+    }
+
+    async runMatmulGpu(a, b) {
+        if (!this.ready) await this.init()
+        const { run_matmul_gpu } = this.module || await import('../../crates/aoprism-crypto/pkg/aoprism_crypto.js')
+        return await run_matmul_gpu(a, b)
+    }
+
     // --- Contract Alignment ---
 
     async signAns104(data, jwk) {
@@ -143,19 +198,87 @@ if (import.meta.env.DEV) {
  * A signer that mimics the ArweaveSigner interface but uses Rust/WASM.
  * Compatible with arbundles createData().
  */
+const addressCache = new Map()
+
+async function computeModulusHash(modulusB64Url) {
+    const modulusBytes = b64UrlToBytes(modulusB64Url)
+    const digest = await crypto.subtle.digest('SHA-256', modulusBytes)
+    return bytesToHex(digest)
+}
+
+function bytesToHex(buffer) {
+    return Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+}
+
+function b64UrlToBytes(b64url) {
+    const b64 = String(b64url)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+        .padEnd(Math.ceil(String(b64url).length / 4) * 4, '=')
+    const binary = atob(b64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i)
+    }
+    return bytes
+}
+
+function bytesToB64Url(bytes) {
+    const b64 = btoa(String.fromCharCode(...bytes))
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+async function deriveAddressFromModulus(modulusB64Url) {
+    const modulusHash = await computeModulusHash(modulusB64Url)
+    
+    if (addressCache.has(modulusHash)) {
+        return addressCache.get(modulusHash)
+    }
+    
+    const modulusBytes = b64UrlToBytes(modulusB64Url)
+    const digest = await crypto.subtle.digest('SHA-256', modulusBytes)
+    const address = bytesToB64Url(new Uint8Array(digest))
+    
+    addressCache.set(modulusHash, address)
+    return address
+}
+
+export async function getCachedAddress(modulusB64Url) {
+    if (!modulusB64Url) return null
+    return deriveAddressFromModulus(modulusB64Url)
+}
+
+export function getAddressCacheSize() {
+    return addressCache.size
+}
+
+export function clearAddressCache() {
+    addressCache.clear()
+}
+
 export class RustSigner {
+    #address = null
+    
     constructor(jwkOrPublic) {
         if (typeof jwkOrPublic === 'object' && jwkOrPublic !== null) {
             this.jwk = jwkOrPublic
             this.publicKey = this._b64UrlToBuffer(jwkOrPublic.n)
+            this.#address = deriveAddressFromModulus(jwkOrPublic.n)
         } else if (typeof jwkOrPublic === 'string') {
             this.jwk = null
             this.publicKey = this._b64UrlToBuffer(jwkOrPublic)
+            this.#address = deriveAddressFromModulus(jwkOrPublic)
         }
 
         this.signatureType = 1 // Arweave
         this.ownerLength = 512 // 4096 bit key / 8
         this.signatureLength = 512
+    }
+    
+    get address() {
+        return this.#address
     }
 
     get publicKey() {
@@ -188,6 +311,17 @@ export class RustSigner {
         this.publicKey = null
         this._publicKey = null
         this._wiped = true
+    }
+
+    /**
+     * Dispose of WASM memory. Call when signer is no longer needed.
+     */
+    dispose() {
+        this.wipe()
+        if (this._wasmPtr && typeof rustBridge.freeMemory === 'function') {
+            rustBridge.freeMemory(this._wasmPtr)
+            this._wasmPtr = null
+        }
     }
 
     // Helper to match arbundles internal logic

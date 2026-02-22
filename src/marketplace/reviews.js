@@ -1,21 +1,259 @@
 import { DEFAULTS } from '../core/config.js'
-import { makeAoClient } from '../core/aoClient.js'
+import { makeAoClient, sendAndGetResult } from '../core/aoClient.js'
+
+const REPUTATION_PROCESS = 'REP_OCD6pWMJPgU8g2MKg3E6vMnLgA2XrTkBhCjF9VmQz0'
+
+export class ReputationRegistry {
+  constructor(config = {}) {
+    this.reviews = new Map()
+    this.aoProcess = config.aoProcess || REPUTATION_PROCESS
+    this.useAO = config.useAO !== false
+    this.cacheEnabled = config.cacheEnabled !== false
+    this.signer = null
+    this.ao = null
+    this.relayUrl = null
+    this.autoRelay = null
+    this.initialized = false
+  }
+
+  async initialize() {
+    if (this.initialized) return
+    
+    try {
+      const result = await makeAoClient({
+        URL: DEFAULTS.URL,
+        SCHEDULER: DEFAULTS.SCHEDULER
+      })
+      this.ao = result.ao
+      this.signer = result.signer
+      this.relayUrl = result.relayUrl
+      this.autoRelay = result.autoRelay
+      this.initialized = true
+    } catch (error) {
+      console.warn('[ReputationRegistry] Initialize failed:', error.message)
+    }
+  }
+
+  async submitReview(processId, rating, comment, reviewer = {}) {
+    if (!processId || !rating) {
+      throw new Error('processId and rating are required')
+    }
+
+    const validatedRating = Math.min(5, Math.max(1, parseInt(rating, 10) || 3))
+    const timestamp = Date.now()
+    const reviewId = `rev_${timestamp}_${Math.random().toString(36).substr(2, 9)}`
+
+    const review = {
+      id: reviewId,
+      processId,
+      reviewer: reviewer.address || reviewer.name || 'Anonymous',
+      rating: validatedRating,
+      comment: String(comment || ''),
+      timestamp: timestamp,
+      createdAt: new Date(timestamp).toISOString()
+    }
+
+    if (this.cacheEnabled) {
+      if (!this.reviews.has(processId)) {
+        this.reviews.set(processId, [])
+      }
+      this.reviews.get(processId).push(review)
+    }
+
+    if (this.useAO && this.ao) {
+      try {
+        await this.persistReviewToAO(review)
+      } catch (error) {
+        console.warn('[ReputationRegistry] Submit to AO failed:', error.message)
+      }
+    }
+
+    return review
+  }
+
+  async persistReviewToAO(review) {
+    const tags = [
+      { name: 'Action', value: 'SubmitReview' },
+      { name: 'Reviewer', value: review.reviewer },
+      { name: 'Rating', value: String(review.rating) },
+      { name: 'Comment', value: review.comment },
+      { name: 'ProcessId', value: review.processId },
+      { name: 'Timestamp', value: String(review.timestamp) },
+      { name: 'ReviewId', value: review.id }
+    ]
+
+    const data = JSON.stringify({
+      id: review.id,
+      processId: review.processId,
+      reviewer: review.reviewer,
+      rating: review.rating,
+      comment: review.comment,
+      timestamp: review.timestamp
+    })
+
+    await sendAndGetResult({
+      ao: this.ao,
+      signer: this.signer,
+      process: this.aoProcess,
+      tags,
+      data,
+      relayUrl: this.relayUrl,
+      autoRelay: this.autoRelay
+    })
+  }
+
+  async getReviews(processId) {
+    if (this.cacheEnabled && this.reviews.has(processId)) {
+      return this.reviews.get(processId).sort((a, b) => b.timestamp - a.timestamp)
+    }
+
+    if (!this.useAO || !this.ao) {
+      return []
+    }
+
+    try {
+      const result = await this.ao.dryrun({
+        process: this.aoProcess,
+        tags: [
+          { name: 'Action', value: 'GetReviews' },
+          { name: 'ProcessId', value: processId }
+        ]
+      })
+
+      const reviews = this.parseReviewsFromResult(result, processId)
+
+      if (this.cacheEnabled) {
+        this.reviews.set(processId, reviews)
+      }
+
+      return reviews.sort((a, b) => b.timestamp - a.timestamp)
+    } catch (error) {
+      console.warn('[ReputationRegistry] Get reviews failed:', error.message)
+      return this.cacheEnabled ? (this.reviews.get(processId) || []) : []
+    }
+  }
+
+  parseReviewsFromResult(result, processId) {
+    const reviews = []
+    
+    if (!result?.Output?.messages) {
+      return reviews
+    }
+
+    for (const msg of result.Output.messages) {
+      try {
+        const data = msg.Data || msg.data
+        if (!data) continue
+
+        const reviewData = JSON.parse(data)
+        
+        if (reviewData.processId === processId || reviewData.ProcessId === processId) {
+          reviews.push({
+            id: reviewData.id || reviewData.ReviewId,
+            processId: reviewData.processId || reviewData.ProcessId,
+            reviewer: reviewData.reviewer || reviewData.Reviewer,
+            rating: parseInt(reviewData.rating || reviewData.Rating, 10),
+            comment: reviewData.comment || reviewData.Comment,
+            timestamp: parseInt(reviewData.timestamp || reviewData.Timestamp, 10),
+            createdAt: reviewData.createdAt || new Date(parseInt(reviewData.timestamp, 10)).toISOString()
+          })
+        }
+      } catch (e) {
+        // Skip invalid review data
+      }
+    }
+
+    return reviews
+  }
+
+  async getAverageRating(processId) {
+    const reviews = await this.getReviews(processId)
+    
+    if (!reviews || reviews.length === 0) {
+      return { rating: 0, count: 0 }
+    }
+
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0)
+    return {
+      rating: parseFloat((sum / reviews.length).toFixed(1)),
+      count: reviews.length
+    }
+  }
+
+  async getRatingDistribution(processId) {
+    const reviews = await this.getReviews(processId)
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+
+    for (const review of reviews) {
+      const rating = Math.round(review.rating)
+      if (distribution[rating] !== undefined) {
+        distribution[rating]++
+      }
+    }
+
+    return distribution
+  }
+
+  async getReviewerReputation(reviewer) {
+    const allReviews = []
+    
+    for (const [processId, reviews] of this.reviews) {
+      allReviews.push(...reviews.filter(r => r.reviewer === reviewer))
+    }
+
+    if (allReviews.length === 0) {
+      return { totalReviews: 0, averageGiven: 0 }
+    }
+
+    const sum = allReviews.reduce((acc, r) => acc + r.rating, 0)
+    return {
+      totalReviews: allReviews.length,
+      averageGiven: parseFloat((sum / allReviews.length).toFixed(1))
+    }
+  }
+
+  async getTopRatedProcesses(limit = 10) {
+    const processRatings = new Map()
+
+    for (const [processId, reviews] of this.reviews) {
+      if (reviews.length > 0) {
+        const sum = reviews.reduce((acc, r) => acc + r.rating, 0)
+        processRatings.set(processId, {
+          processId,
+          rating: parseFloat((sum / reviews.length).toFixed(1)),
+          count: reviews.length
+        })
+      }
+    }
+
+    return Array.from(processRatings.values())
+      .sort((a, b) => b.rating - a.rating || b.count - a.count)
+      .slice(0, limit)
+  }
+
+  clearCache() {
+    this.reviews.clear()
+  }
+}
 
 export class ReviewSystem {
   constructor(config = {}) {
-    this.reviews = new Map();
+    this.reviews = new Map()
     this.aoProcess = config.aoProcess || DEFAULTS.REGISTRY_ID
     this.cacheEnabled = config.cacheEnabled !== false
     this.useAO = config.useAO !== false
+    this.reputationRegistry = config.useAO !== false ? new ReputationRegistry({
+      aoProcess: config.aoProcess,
+      cacheEnabled: config.cacheEnabled,
+      useAO: config.useAO
+    }) : null
   }
 
   async syncWithAO() {
     if (!this.useAO) return
 
     try {
-      const state = {}
       const { ao } = await makeAoClient({
-        jwk: state.jwk,
         URL: DEFAULTS.URL,
         SCHEDULER: DEFAULTS.SCHEDULER
       })
@@ -43,6 +281,15 @@ export class ReviewSystem {
   }
 
   async addReview(processId, review) {
+    if (this.reputationRegistry && this.useAO) {
+      return await this.reputationRegistry.submitReview(
+        processId,
+        review.rating,
+        review.content || review.comment || '',
+        review.author || {}
+      )
+    }
+
     const reviewId = `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const newReview = {
@@ -70,7 +317,6 @@ export class ReviewSystem {
 
     this.reviews.get(processId).push(newReview);
 
-    // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
@@ -78,11 +324,16 @@ export class ReviewSystem {
     return newReview;
   }
 
+  async submitReview(processId, rating, comment, reviewer = {}) {
+    if (this.reputationRegistry) {
+      return await this.reputationRegistry.submitReview(processId, rating, comment, reviewer)
+    }
+    return await this.addReview(processId, { rating, content: comment, author: reviewer })
+  }
+
   async persistToAO(processId) {
     try {
-      const state = {}
       const { ao, signer } = await makeAoClient({
-        jwk: state.jwk,
         URL: DEFAULTS.URL,
         SCHEDULER: DEFAULTS.SCHEDULER
       })
@@ -100,7 +351,6 @@ export class ReviewSystem {
       })
     } catch (error) {
       console.warn('[ReviewSystem] Persist failed:', error.message)
-      // Data stays in memory cache
     }
   }
 
@@ -123,7 +373,6 @@ export class ReviewSystem {
 
     review.updatedAt = new Date().toISOString();
 
-    // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
@@ -140,7 +389,6 @@ export class ReviewSystem {
 
     processReviews.splice(index, 1);
 
-    // Persist to AO
     if (this.useAO) {
       await this.persistToAO(processId)
     }
@@ -148,7 +396,10 @@ export class ReviewSystem {
     return true;
   }
 
-  getReviews(processId) {
+  async getReviews(processId) {
+    if (this.reputationRegistry && this.useAO) {
+      return await this.reputationRegistry.getReviews(processId)
+    }
     return (this.reviews.get(processId) || []).sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
@@ -161,7 +412,10 @@ export class ReviewSystem {
     return processReviews.find(r => r.id === reviewId) || null;
   }
 
-  getAverageRating(processId) {
+  async getAverageRating(processId) {
+    if (this.reputationRegistry && this.useAO) {
+      return await this.reputationRegistry.getAverageRating(processId)
+    }
     const reviews = this.reviews.get(processId);
     if (!reviews || reviews.length === 0) {
       return { rating: 0, count: 0 };
@@ -282,4 +536,9 @@ export function createReviewSystem(config) {
   return new ReviewSystem(config);
 }
 
+export function createReputationRegistry(config) {
+  return new ReputationRegistry(config);
+}
+
+export { ReputationRegistry as Reputation };
 export default ReviewSystem;

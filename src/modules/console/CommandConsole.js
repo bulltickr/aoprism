@@ -194,19 +194,18 @@ export async function executeCommand(cmd, args) {
                 }
                 if (sub === 'test') {
                     try {
-                        // Determine test file path based on OS (Assuming Windows based on User Context, or use relative)
-                        // We'll read the package.json of the MCP project
-                        const demoPath = './package.json'
+                        if (!args[0]) throw new Error('Usage: /bridge test <file_path>')
+                        const filePath = args.join(' ')
 
-                        appendToConsole(`[TEST] Agent requesting to read: ${demoPath}`)
-                        const result = await mcpBridge.executeTool('fs_read_file', { path: demoPath })
+                        appendToConsole(`[TEST] Agent requesting to read: ${filePath}`)
+                        const result = await mcpBridge.executeTool('fs_read_file', { path: filePath })
 
                         return `Result: ${JSON.stringify(result).slice(0, 100)}...`
                     } catch (e) {
                         return `Bridge Error: ${e.message}`
                     }
                 }
-                return 'Usage: /bridge [connect|status|test]'
+                return 'Usage: /bridge [connect|status|test <file_path>]'
 
             // --- CORE COMMANDS ---
             case '/spawn':
@@ -220,6 +219,9 @@ export async function executeCommand(cmd, args) {
                     ],
                     signer
                 })
+                const newSpawn = { id: pid, name, timestamp: Date.now() }
+                const existingSpawns = state.recentSpawns || []
+                setState({ recentSpawns: [newSpawn, ...existingSpawns].slice(0, 20) })
                 return `🚀 Spawned Agent: ${name}\nID: ${pid}`
 
             case '/eval':
@@ -266,6 +268,129 @@ export function attachConsoleEvents(root) {
     const output = root.querySelector('#console-output')
     const clearBtn = root.querySelector('#clear-console')
 
+    let completionDropdown = null
+    let completionSuggestions = []
+    let selectedCompletionIndex = -1
+
+    function getProcessIds() {
+        const state = getState()
+        const pids = new Set()
+        
+        if (state.recentSpawns) {
+            state.recentSpawns.forEach(s => {
+                if (s.id) pids.add(s.id)
+            })
+        }
+        
+        if (state.tokens) {
+            state.tokens.forEach(t => {
+                if (t.processId) pids.add(t.processId)
+            })
+        }
+        
+        if (state.devWallet?.processId) {
+            pids.add(state.devWallet.processId)
+        }
+        
+        return Array.from(pids)
+    }
+
+    function showCompletionDropdown(input, suggestions) {
+        if (!suggestions.length) {
+            hideCompletionDropdown()
+            return
+        }
+
+        if (!completionDropdown) {
+            completionDropdown = document.createElement('div')
+            completionDropdown.className = 'console-completion-dropdown'
+            completionDropdown.style.cssText = `
+                position: absolute;
+                background: rgba(0, 0, 0, 0.95);
+                border: 1px solid #333;
+                border-radius: 4px;
+                max-height: 200px;
+                overflow-y: auto;
+                z-index: 1000;
+                font-family: 'Fira Code', monospace;
+                font-size: 0.9rem;
+                min-width: 300px;
+            `
+            input.parentElement.appendChild(completionDropdown)
+        }
+
+        completionSuggestions = suggestions
+        selectedCompletionIndex = -1
+
+        completionDropdown.innerHTML = suggestions.map((s, i) => `
+            <div class="completion-item" data-index="${i}" style="
+                padding: 8px 12px;
+                cursor: pointer;
+                color: ${i === 0 ? '#4ade80' : '#fff'};
+                background: ${i === 0 ? 'rgba(74, 222, 128, 0.1)' : 'transparent'};
+            ">${s}</div>
+        `).join('')
+
+        completionDropdown.querySelectorAll('.completion-item').forEach((item, i) => {
+            item.addEventListener('click', () => {
+                selectCompletion(i)
+            })
+            item.addEventListener('mouseenter', () => {
+                selectedCompletionIndex = i
+                updateCompletionSelection()
+            })
+        })
+    }
+
+    function hideCompletionDropdown() {
+        if (completionDropdown) {
+            completionDropdown.remove()
+            completionDropdown = null
+        }
+        completionSuggestions = []
+        selectedCompletionIndex = -1
+    }
+
+    function updateCompletionSelection() {
+        if (!completionDropdown) return
+        completionDropdown.querySelectorAll('.completion-item').forEach((item, i) => {
+            item.style.color = i === selectedCompletionIndex ? '#4ade80' : '#fff'
+            item.style.background = i === selectedCompletionIndex ? 'rgba(74, 222, 128, 0.1)' : 'transparent'
+        })
+    }
+
+    function selectCompletion(index) {
+        if (index < 0 || index >= completionSuggestions.length) return
+        
+        const input = root.querySelector('#console-input')
+        const value = input.value
+        const lastSpace = value.lastIndexOf(' ')
+        
+        if (lastSpace === -1) {
+            input.value = completionSuggestions[index]
+        } else {
+            input.value = value.substring(0, lastSpace + 1) + completionSuggestions[index]
+        }
+        
+        hideCompletionDropdown()
+        input.focus()
+    }
+
+    function getCompletionsForCurrentInput(value) {
+        const parts = value.split(' ')
+        if (parts.length < 2) return []
+
+        const cmd = parts[0]
+        if (cmd !== '/spawn' && cmd !== '/eval') return []
+
+        const currentArg = parts[parts.length - 1]
+        const allPids = getProcessIds()
+        
+        if (!currentArg) return allPids
+        
+        return allPids.filter(pid => pid.toLowerCase().includes(currentArg.toLowerCase()))
+    }
+
     // Auto-scroll to bottom
     if (output) output.scrollTop = output.scrollHeight
 
@@ -287,6 +412,7 @@ export function attachConsoleEvents(root) {
 
         input.onkeydown = async (e) => {
             if (e.key === 'Enter') {
+                hideCompletionDropdown()
                 const raw = input.value.trim()
                 if (!raw) return
 
@@ -316,7 +442,44 @@ export function attachConsoleEvents(root) {
                     }
                     appendToConsole(`❌ ${msg}`, 'error')
                 }
+            } else if (e.key === 'Tab') {
+                e.preventDefault()
+                const suggestions = getCompletionsForCurrentInput(input.value)
+                if (suggestions.length > 0) {
+                    if (completionSuggestions.length > 0 && selectedCompletionIndex >= 0) {
+                        selectCompletion(selectedCompletionIndex)
+                    } else {
+                        selectCompletion(0)
+                    }
+                }
+            } else if (e.key === 'ArrowDown') {
+                if (completionSuggestions.length > 0) {
+                    e.preventDefault()
+                    selectedCompletionIndex = Math.min(selectedCompletionIndex + 1, completionSuggestions.length - 1)
+                    updateCompletionSelection()
+                }
+            } else if (e.key === 'ArrowUp') {
+                if (completionSuggestions.length > 0) {
+                    e.preventDefault()
+                    selectedCompletionIndex = Math.max(selectedCompletionIndex - 1, 0)
+                    updateCompletionSelection()
+                }
+            } else if (e.key === 'Escape') {
+                hideCompletionDropdown()
             }
         }
+
+        input.addEventListener('input', () => {
+            const suggestions = getCompletionsForCurrentInput(input.value)
+            if (suggestions.length > 0) {
+                showCompletionDropdown(input, suggestions)
+            } else {
+                hideCompletionDropdown()
+            }
+        })
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => hideCompletionDropdown(), 150)
+        })
     }
 }

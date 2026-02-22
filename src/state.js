@@ -7,6 +7,7 @@
 import { DEFAULTS } from './core/config.js'
 import { rustBridge } from './core/rust-bridge.js'
 import { brain } from './modules/console/ConsoleBrain.js'
+import { saveToIDB, loadFromIDB, getIDBStorageEstimate, clearStore } from './utils/IndexedDB.js'
 
 export const initialState = {
     // Navigation
@@ -80,35 +81,48 @@ export const initialState = {
 
 const STORAGE_KEY = 'aoprism:state'
 
-// Helper to save sensitive state to localStorage
-function saveToStorage(state) {
+async function saveToStorage(state) {
+    const toSave = {
+        address: state.address,
+        username: state.username,
+        isGuest: state.isGuest,
+        hasKey: state.hasKey,
+        activeModule: state.activeModule,
+        network: state.network,
+        mcpHost: state.mcpHost,
+        mcpPort: state.mcpPort,
+        mcpApiKey: state.mcpApiKey
+    }
+
     try {
-        const toSave = {
-            address: state.address,
-            username: state.username,
-            isGuest: state.isGuest,
-            hasKey: state.hasKey,
-            activeModule: state.activeModule,
-            network: state.network,
-            // MCP Server config
-            mcpHost: state.mcpHost,
-            mcpPort: state.mcpPort,
-            mcpApiKey: state.mcpApiKey
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+        await saveToIDB('state', 'main', toSave)
     } catch (e) {
-        console.warn('Failed to save state to localStorage:', e)
+        console.warn('[State] Failed to save to IndexedDB, falling back to localStorage:', e)
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+        } catch (e2) {
+            console.warn('[State] Failed to save state to localStorage:', e2)
+        }
     }
 }
 
-// Helper to load state from localStorage
-function loadFromStorage() {
+async function loadFromStorage() {
+    try {
+        const idbData = await loadFromIDB('state', 'main')
+        if (idbData) {
+            console.log('[State] Loaded state from IndexedDB')
+            return idbData
+        }
+    } catch (e) {
+        console.warn('[State] Failed to load from IndexedDB, trying localStorage:', e)
+    }
+
     try {
         const saved = localStorage.getItem(STORAGE_KEY)
         if (!saved) return {}
         return JSON.parse(saved)
     } catch (e) {
-        console.warn('Failed to load state from localStorage:', e)
+        console.warn('[State] Failed to load state from localStorage:', e)
         return {}
     }
 }
@@ -117,27 +131,28 @@ let state = { ...initialState } // Initialize with initialState, will be updated
 const listeners = []
 
 export async function initializeState() {
-    const saved = loadFromStorage()
+    const saved = await loadFromStorage()
     state = { ...initialState, ...saved }
 
-    // Check for encrypted wallet
     const walletData = localStorage.getItem('aoprism:wallet')
     if (walletData) {
         try {
             const parsed = JSON.parse(walletData)
             if (parsed.ciphertext) {
-                // It's encrypted, mark as locked
-                // We'll need a vaultKey to decrypt it later
                 state.vaultLocked = true
                 state.hasKey = true
             } else {
-                // Plain-text legacy migration (will be encrypted on next set)
                 state.jwk = parsed
                 state.hasKey = true
             }
         } catch (e) {
             console.error('Failed to parse wallet data:', e)
         }
+    }
+
+    const storageInfo = await getIDBStorageEstimate()
+    if (storageInfo) {
+        console.log(`[State] IndexedDB storage: ${(storageInfo.usage / 1024 / 1024).toFixed(2)}MB / ${(storageInfo.quota / 1024 / 1024).toFixed(2)}MB (${storageInfo.usagePercent}%)`)
     }
 }
 
@@ -160,11 +175,6 @@ export async function setState(patch, notify = true) {
             if (state.vaultKey) {
                 const encrypted = await rustBridge.encryptData(patch.jwk, state.vaultKey)
                 localStorage.setItem('aoprism:wallet', JSON.stringify(encrypted))
-            } else if (isDebug()) {
-                // In debug mode, we allow it but log a heavy warning.
-                // In production, the key simply won't be persisted if the vault is missing.
-                console.warn('[Security] Plaintext JWK persistence is DISCOURAGED. Setup a vault to enable secure storage.')
-                localStorage.setItem('aoprism:wallet', JSON.stringify(patch.jwk))
             }
 
             // Set address and flag, but null out the actual JWK in the state
@@ -203,7 +213,7 @@ export async function setState(patch, notify = true) {
     }
 
     // Persist critical fields (excluding raw JWK from general state storage)
-    saveToStorage(state)
+    await saveToStorage(state)
 }
 
 export function subscribe(fn) {
@@ -217,6 +227,16 @@ export function subscribe(fn) {
 export async function resetState() {
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem('aoprism:wallet')
+
+    // Clear IndexedDB stores
+    try {
+        await clearStore('state')
+        await clearStore('memories')
+        await clearStore('skills')
+        await clearStore('cache')
+    } catch (e) {
+        console.warn('[State] Failed to clear IndexedDB during reset:', e)
+    }
 
     // Nuclear wipe: clear enclave and in-memory key material
     try {

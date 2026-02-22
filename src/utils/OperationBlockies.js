@@ -111,69 +111,101 @@ export function generateOperationBlockies(operationData) {
 // Show signing confirmation dialog with blockies
 export function showSigningDialog(operation, onConfirm, onCancel) {
     const blockies = generateOperationBlockies(operation)
+    const previousActiveElement = document.activeElement
 
     const dialog = document.createElement('div')
     dialog.className = 'signing-dialog'
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    dialog.setAttribute('aria-labelledby', 'signing-title')
+    dialog.setAttribute('aria-describedby', 'signing-desc')
     dialog.innerHTML = `
-        <div class="signing-backdrop"></div>
-        <div class="signing-content">
-            <h3>⚠️ Confirm Operation</h3>
+        <div class="signing-backdrop" aria-hidden="true"></div>
+        <div class="signing-content" role="document" tabindex="-1">
+            <h3 id="signing-title">⚠️ Confirm Operation</h3>
             
-            <div class="signing-blockies">
+            <div class="signing-blockies" aria-hidden="true">
                 ${blockies.toSVG(8)}
             </div>
             
-            <div class="signing-details">
+            <div class="signing-details" id="signing-desc">
                 <div class="signing-field">
-                    <label>Action</label>
-                    <span>${operation.action || 'Unknown'}</span>
+                    <label id="signing-action-label">Action</label>
+                    <span aria-labelledby="signing-action-label">${operation.action || 'Unknown'}</span>
                 </div>
                 <div class="signing-field">
-                    <label>Process</label>
-                    <span class="monospace">${truncateAddress(operation.process)}</span>
+                    <label id="signing-process-label">Process</label>
+                    <span class="monospace" aria-labelledby="signing-process-label">${truncateAddress(operation.process)}</span>
                 </div>
                 ${operation.amount ? `
                 <div class="signing-field">
-                    <label>Amount</label>
-                    <span class="highlight">${operation.amount} ${operation.token || 'AR'}</span>
+                    <label id="signing-amount-label">Amount</label>
+                    <span class="highlight" aria-labelledby="signing-amount-label">${operation.amount} ${operation.token || 'AR'}</span>
                 </div>
                 ` : ''}
                 <div class="signing-field">
-                    <label>Network Fee</label>
-                    <span>~0.001 AR</span>
+                    <label id="signing-fee-label">Network Fee</label>
+                    <span aria-labelledby="signing-fee-label">~0.001 AR</span>
                 </div>
             </div>
             
             <div class="signing-notice">
                 <small>🔒 Verify the pattern above matches your expected operation</small>
-                <div class="rust-verified-badge">
-                    <span class="badge-icon">🦀</span>
+                <div class="rust-verified-badge" role="img" aria-label="Verified by Rust WASM">
+                    <span class="badge-icon" aria-hidden="true">🦀</span>
                     <span>Verified by Rust WASM</span>
                 </div>
             </div>
             
             <div class="signing-actions">
                 <button class="btn btn-secondary" id="signing-cancel">Cancel</button>
-                <button class="btn btn-primary" id="signing-confirm">✓ Sign & Submit</button>
+                <button class="btn btn-primary" id="signing-confirm" autofocus>✓ Sign & Submit</button>
             </div>
         </div>
     `
 
     document.body.appendChild(dialog)
+    document.body.style.overflow = 'hidden'
+    
+    // Focus the confirm button
+    setTimeout(() => {
+        dialog.querySelector('#signing-confirm').focus()
+    }, 10)
+
+    // Handle escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            dialog.remove()
+            document.body.style.overflow = ''
+            document.removeEventListener('keydown', handleEscape)
+            if (previousActiveElement) previousActiveElement.focus()
+            onCancel()
+        }
+    }
+    document.addEventListener('keydown', handleEscape)
 
     // Event handlers
     dialog.querySelector('#signing-confirm').addEventListener('click', () => {
         dialog.remove()
+        document.body.style.overflow = ''
+        document.removeEventListener('keydown', handleEscape)
+        if (previousActiveElement) previousActiveElement.focus()
         onConfirm()
     })
 
     dialog.querySelector('#signing-cancel').addEventListener('click', () => {
         dialog.remove()
+        document.body.style.overflow = ''
+        document.removeEventListener('keydown', handleEscape)
+        if (previousActiveElement) previousActiveElement.focus()
         onCancel()
     })
 
     dialog.querySelector('.signing-backdrop').addEventListener('click', () => {
         dialog.remove()
+        document.body.style.overflow = ''
+        document.removeEventListener('keydown', handleEscape)
+        if (previousActiveElement) previousActiveElement.focus()
         onCancel()
     })
 }

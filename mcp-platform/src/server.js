@@ -7,6 +7,7 @@
 import express from 'express'
 import cors from 'cors'
 import bodyParser from 'body-parser'
+import crypto from 'crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
@@ -21,6 +22,15 @@ const httpPortArg = args.find(a => a.startsWith('--http-port='))
 const HTTP_PORT = httpPortArg ? parseInt(httpPortArg.replace('--http-port=', '')) : 3002
 
 const wallet = loadWallet(walletPath)
+
+/**
+ * Session token security:
+ * - Generated securely using crypto.randomUUID() on server startup
+ * - Must be provided via X-Session-Token header for SSE connections
+ * - Clients can retrieve it from /health endpoint
+ */
+const SESSION_TOKEN = crypto.randomUUID()
+console.error(`[Security] Session token generated: ${SESSION_TOKEN.substring(0, 8)}...`)
 
 // We create two server instances to support both Stdio and SSE in parallel 
 // (McpServer connects 1:1 to a transport)
@@ -81,7 +91,8 @@ async function startHttpServer() {
             status: 'ok',
             tools: toolCount,
             uptime: process.uptime(),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            sessionToken: SESSION_TOKEN
         })
     })
 
@@ -105,6 +116,13 @@ async function startHttpServer() {
 
     app.get('/sse', async (req, res) => {
         try {
+            // Validate session token before establishing connection
+            const clientToken = req.headers['x-session-token']
+            if (!clientToken || clientToken !== SESSION_TOKEN) {
+                console.error(`[Security] 🔒 SSE connection rejected: invalid or missing token`)
+                return res.status(401).json({ error: 'Unauthorized: valid session token required' })
+            }
+
             console.error(`[Neural Bridge] 🔌 SSE Client Connecting...`)
             const sessionId = `session-${++sessionCounter}`
             sseTransport = new SSEServerTransport('/messages', res)

@@ -100,6 +100,7 @@ export function showToast(message, type = 'info') {
   const toast = document.createElement('div')
   toast.className = `toast ${type}`
   toast.setAttribute('role', 'alert')
+  toast.setAttribute('aria-live', 'polite')
 
   const iconSpan = document.createElement('span')
   iconSpan.className = 'toast-icon'
@@ -109,8 +110,18 @@ export function showToast(message, type = 'info') {
   const textSpan = document.createElement('span')
   textSpan.textContent = message
 
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'toast-close'
+  closeBtn.setAttribute('aria-label', 'Dismiss notification')
+  closeBtn.textContent = '×'
+  closeBtn.onclick = () => {
+    toast.style.animation = 'fadeOut 0.3s forwards'
+    setTimeout(() => toast.remove(), 300)
+  }
+
   toast.appendChild(iconSpan)
   toast.appendChild(textSpan)
+  toast.appendChild(closeBtn)
   container.appendChild(toast)
 
   setTimeout(() => {

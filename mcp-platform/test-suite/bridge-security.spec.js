@@ -10,6 +10,7 @@ const BASE_URL = `http://127.0.0.1:${TEST_PORT}`
 
 describe('🛡️ Neural Bridge Security Audit', () => {
     let serverProcess
+    let sessionToken
 
     // Start a fresh server for every test to avoid SSE transport state issues
     beforeEach(async () => {
@@ -23,7 +24,14 @@ describe('🛡️ Neural Bridge Security Audit', () => {
                 const log = data.toString()
                 console.log('[Server Log]', log) // Uncomment for debug
                 if (log.includes('HTTP Server listening')) {
-                    resolve()
+                    // Fetch session token from /health
+                    fetch(`${BASE_URL}/health`)
+                        .then(res => res.json())
+                        .then(data => {
+                            sessionToken = data.sessionToken
+                            resolve()
+                        })
+                        .catch(reject)
                 }
             })
 
@@ -42,25 +50,42 @@ describe('🛡️ Neural Bridge Security Audit', () => {
 
     it('✅ Should accept connections from 127.0.0.1 (Localhost)', async () => {
         const response = await fetch(`${BASE_URL}/sse`, {
-            headers: { 'Origin': 'http://localhost:5173' }
+            headers: { 
+                'Origin': 'http://localhost:5173',
+                'X-Session-Token': sessionToken
+            }
         })
         expect(response.status).toBe(200)
     })
 
     it('🔒 Should explicitly reject non-local headers (Simulation)', async () => {
         const response = await fetch(`http://localhost:${TEST_PORT}/sse`, {
-            headers: { 'Origin': 'http://localhost:5173' }
+            headers: { 
+                'Origin': 'http://localhost:5173',
+                'X-Session-Token': sessionToken
+            }
         })
         expect(response.status).toBe(200)
     })
 
     it('🛡️ Server should not expose dangerous headers', async () => {
-        const response = await fetch(`${BASE_URL}/sse`, {
-            headers: { 'Origin': 'http://localhost:5173' }
-        })
-        const headers = response.headers
-        expect(headers.get('x-powered-by')).toBeNull()
-        // Check CORS
-        expect(headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
-    })
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+        
+        try {
+            const response = await fetch(`${BASE_URL}/sse`, {
+                headers: { 
+                    'Origin': 'http://localhost:5173',
+                    'X-Session-Token': sessionToken
+                },
+                signal: controller.signal
+            })
+            const headers = response.headers
+            expect(headers.get('x-powered-by')).toBeNull()
+            // Check CORS
+            expect(headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+        } finally {
+            clearTimeout(timeout)
+        }
+    }, 10000)
 })

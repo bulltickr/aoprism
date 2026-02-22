@@ -10,6 +10,90 @@ const __dirname = path.dirname(__filename);
 const TEMPLATE_PATH = path.resolve(__dirname, '../../lua/skills/template.lua');
 const SNIPPETS_DIR = path.resolve(__dirname, '../../../docs/snippets');
 const SKILLS_DIR = path.resolve(__dirname, '../../lua/skills');
+const MARKETPLACE_PROCESSES_PATH = path.resolve(__dirname, '../../../data/marketplace/processes.json');
+
+class StandaloneDependencyResolver {
+  constructor(processes = []) {
+    this.processes = new Map();
+    for (const process of processes) {
+      this.addProcess(process);
+    }
+  }
+
+  addProcess(process) {
+    this.processes.set(process.id, process);
+  }
+
+  resolve(processIdOrName, resolved = new Set(), unresolved = new Set()) {
+    let process = this.processes.get(processIdOrName);
+    
+    if (!process) {
+      for (const p of this.processes.values()) {
+        if (p.name?.toLowerCase() === processIdOrName.toLowerCase()) {
+          process = p;
+          break;
+        }
+      }
+    }
+    
+    if (!process) {
+      return [];
+    }
+    
+    const processId = process.id;
+    
+    if (unresolved.has(processId)) {
+      return [];
+    }
+
+    unresolved.add(processId);
+    const dependencies = [];
+    
+    for (const dep of (process.dependencies || [])) {
+      if (resolved.has(dep.processId)) {
+        continue;
+      }
+      const subDeps = this.resolve(dep.processId, resolved, unresolved);
+      dependencies.push(...subDeps);
+    }
+
+    unresolved.delete(processId);
+    resolved.add(processId);
+    dependencies.push({
+      id: process.id,
+      name: process.name,
+      version: process.version,
+      code: process.code,
+      dependencies: process.dependencies
+    });
+    
+    return dependencies;
+  }
+
+  getProcess(idOrName) {
+    for (const process of this.processes.values()) {
+      if (process.id === idOrName || process.name?.toLowerCase() === idOrName.toLowerCase()) {
+        return process;
+      }
+    }
+    return null;
+  }
+}
+
+let marketplaceResolver = null;
+
+async function getMarketplaceResolver() {
+  if (marketplaceResolver) return marketplaceResolver;
+  
+  try {
+    const processesData = await fs.readFile(MARKETPLACE_PROCESSES_PATH, 'utf8');
+    const processes = JSON.parse(processesData);
+    marketplaceResolver = new StandaloneDependencyResolver(processes);
+    return marketplaceResolver;
+  } catch (e) {
+    return null;
+  }
+}
 
 export const skillScaffoldTool = {
     name: 'skill_scaffold',
@@ -17,11 +101,43 @@ export const skillScaffoldTool = {
     schema: z.object({
         name: z.string().describe('The name of the skill (CamelCase, e.g., "VotingSystem").'),
         description: z.string().describe('A detailed description of what the skill should do.'),
-        model_hint: z.string().optional().describe('Optional hint for the AI to include specific patterns (e.g., "Use JSON state").')
+        model_hint: z.string().optional().describe('Optional hint for the AI to include specific patterns (e.g., "Use JSON state").'),
+        dependencies: z.array(z.string()).optional().describe('Optional list of Marketplace process IDs or names to include as dependencies.')
     }),
-    handler: async ({ name, description, model_hint }) => {
+    handler: async ({ name, description, model_hint, dependencies }) => {
         try {
-            // 1. Read Template
+            // 1. Resolve Marketplace Dependencies
+            let dependencyInfo = "";
+            let resolvedDeps = [];
+            
+            if (dependencies && dependencies.length > 0) {
+                const resolver = await getMarketplaceResolver();
+                if (resolver) {
+                    for (const depId of dependencies) {
+                        const resolved = resolver.resolve(depId);
+                        if (resolved.length > 0) {
+                            resolvedDeps.push(...resolved);
+                        }
+                    }
+                }
+                
+                if (resolvedDeps.length > 0) {
+                    dependencyInfo = `\n-- MARKETPLACE DEPENDENCIES (Auto-included)\n`;
+                    dependencyInfo += `-- Required: ${resolvedDeps.map(d => d.name).join(', ')}\n\n`;
+                    
+                    for (const dep of resolvedDeps) {
+                        dependencyInfo += `-- Dependency: ${dep.name} (${dep.id})\n`;
+                        if (dep.version) {
+                            dependencyInfo += `--   Version: ${dep.version}\n`;
+                        }
+                        if (dep.dependencies && dep.dependencies.length > 0) {
+                            dependencyInfo += `--   Sub-deps: ${dep.dependencies.map(d => d.processId || d.name).join(', ')}\n`;
+                        }
+                    }
+                }
+            }
+
+            // 2. Read Template
             let template = await fs.readFile(TEMPLATE_PATH, 'utf8');
 
             // 2. Read RAG Snippets (Context for the Developer)
@@ -53,7 +169,7 @@ export const skillScaffoldTool = {
   HINT: ${model_hint || 'None'}
 ]]
 ${code}
-
+${dependencyInfo}
 -- ============================================================
 -- RAG CONTEXT (Delete before production)
 -- ============================================================
@@ -72,6 +188,7 @@ ${context}
                 status: "success",
                 path: filePath,
                 message: "Skill scaffolded. Please EDIT the file to implement logical requirements.",
+                dependencies: resolvedDeps.map(d => ({ id: d.id, name: d.name, version: d.version })),
                 preview: fileContent.slice(0, 500) + "..."
             };
 

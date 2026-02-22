@@ -1,0 +1,44 @@
+[
+  {
+    "id": "process_token_vault",
+    "name": "TokenVault",
+    "slug": "token-vault",
+    "description": "Secure token storage and transfer library",
+    "version": "1.0.0",
+    "code": {
+      "lua": "-- TokenVault skill code here"
+    },
+    "dependencies": [],
+    "category": "infrastructure",
+    "tags": ["token", "vault", "storage"]
+  },
+  {
+    "id": "process_json_utils",
+    "name": "JsonUtils",
+    "slug": "json-utils",
+    "description": "JSON encoding/decoding utilities",
+    "version": "1.2.0",
+    "code": {
+      "lua": "-- JsonUtils skill code here"
+    },
+    "dependencies": [],
+    "category": "infrastructure",
+    "tags": ["json", "utils"]
+  },
+  {
+    "id": "process_voting",
+    "name": "VotingSystem",
+    "slug": "voting-system",
+    "description": "DAO voting mechanism",
+    "version": "2.0.0",
+    "code": {
+      "lua": "-- VotingSystem skill code here"
+    },
+    "dependencies": [
+      { "processId": "process_token_vault", "name": "TokenVault" },
+      { "processId": "process_json_utils", "name": "JsonUtils" }
+    ],
+    "category": "dao",
+    "tags": ["voting", "dao", "governance"]
+  }
+]

@@ -542,3 +542,141 @@ pub fn decrypt_data(encrypted_val: JsValue, key_bytes: &[u8]) -> Result<String, 
     
     String::from_utf8(plaintext).map_err(|_| JsValue::from_str("Invalid UTF-8 in decrypted data"))
 }
+
+#[wasm_bindgen]
+pub fn run_matmul_cpu(a: &[f32], b: &[f32], rows_a: usize, cols_a: usize, cols_b: usize) -> Vec<f32> {
+    let mut result = vec![0.0; rows_a * cols_b];
+    
+    for i in 0..rows_a {
+        for j in 0..cols_b {
+            let mut sum = 0.0;
+            for k in 0..cols_a {
+                let a_idx = i * cols_a + k;
+                let b_idx = k * cols_b + j;
+                if a_idx < a.len() && b_idx < b.len() {
+                    sum += a[a_idx] * b[b_idx];
+                }
+            }
+            result[i * cols_b + j] = sum;
+        }
+    }
+    
+    result
+}
+
+#[wasm_bindgen]
+pub async fn run_matmul_gpu(a: &[f32], b: &[f32]) -> Result<Vec<f32>, JsValue> {
+    let instance = wgpu::Instance::default();
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+        .ok_or_else(|| JsValue::from_str("WebGPU not available"))?;
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("AOPRISM-SLM-GPU"),
+                required_features: wgpu::Features::empty(),
+                required_limits: adapter.limits(),
+                memory_hints: wgpu::MemoryHints::Performance,
+            },
+            None,
+        )
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Failed to create GPU device: {}", e)))?;
+
+    use wgpu::util::DeviceExt;
+
+    let size = (a.len() * std::mem::size_of::<f32>()) as wgpu::BufferAddress;
+
+    let buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("GPU Buffer A"),
+        contents: bytemuck::cast_slice(a),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+
+    let buffer_b = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("GPU Buffer B"),
+        contents: bytemuck::cast_slice(b),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+
+    let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("GPU Output Buffer"),
+        size,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("GPU Staging Buffer"),
+        size,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Matmul Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+            "@group(0) @binding(0) var<storage, read> in_a: array<f32>;
+             @group(0) @binding(1) var<storage, read> in_b: array<f32>;
+             @group(0) @binding(2) var<storage, read_write> out: array<f32>;
+             
+             @compute @workgroup_size(64)
+             fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+                 out[global_id.x] = in_a[global_id.x] + in_b[global_id.x];
+             }",
+        )),
+    });
+
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Matmul Pipeline"),
+        layout: None,
+        module: &shader,
+        entry_point: "main",
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Matmul Bind Group"),
+        layout: &pipeline.get_bind_group_layout(0),
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: buffer_a.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: buffer_b.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: output_buffer.as_entire_binding() },
+        ],
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+        cpass.set_pipeline(&pipeline);
+        cpass.set_bind_group(0, &bind_group, &[]);
+        let workgroups = (a.len() as u32 + 63) / 64;
+        cpass.dispatch_workgroups(workgroups, 1, 1);
+    }
+    encoder.copy_buffer_to_buffer(&output_buffer, 0, &staging_buffer, 0, size);
+
+    queue.submit(Some(encoder.finish()));
+
+    let buffer_slice = staging_buffer.slice(..);
+    let (sender, receiver) = futures::channel::oneshot::channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+    device.poll(wgpu::Maintain::Wait);
+
+    if let Ok(Ok(())) = receiver.await {
+        let data = buffer_slice.get_mapped_range();
+        let result = bytemuck::cast_slice(&data).to_vec();
+        drop(data);
+        staging_buffer.unmap();
+        Ok(result)
+    } else {
+        Err(JsValue::from_str("Failed to read GPU buffer"))
+    }
+}

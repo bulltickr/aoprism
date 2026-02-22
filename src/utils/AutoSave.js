@@ -179,38 +179,70 @@ export function setupAutoSave(formId, formElement, fields) {
 // Recovery dialog
 export function showRecoveryDialog(formId, data, age) {
     const minutes = age < 60 ? `${age}m` : `${Math.round(age / 60)}h`
+    const previousActiveElement = document.activeElement
 
     const dialog = document.createElement('div')
     dialog.className = 'recovery-dialog'
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    dialog.setAttribute('aria-labelledby', 'recovery-title')
+    dialog.setAttribute('aria-describedby', 'recovery-desc')
     dialog.innerHTML = `
-        <div class="recovery-backdrop"></div>
-        <div class="recovery-content">
-            <div class="recovery-icon">💾</div>
-            <h3>Recover Unsaved Changes?</h3>
-            <p>Found autosaved data from ${minutes} ago.</p>
+        <div class="recovery-backdrop" aria-hidden="true"></div>
+        <div class="recovery-content" role="document" tabindex="-1">
+            <div class="recovery-icon" aria-hidden="true">💾</div>
+            <h3 id="recovery-title">Recover Unsaved Changes?</h3>
+            <p id="recovery-desc">Found autosaved data from ${minutes} ago.</p>
             <div class="recovery-actions">
-                <button class="btn btn-primary" id="recovery-restore">Restore</button>
+                <button class="btn btn-primary" id="recovery-restore" autofocus>Restore</button>
                 <button class="btn btn-secondary" id="recovery-discard">Discard</button>
             </div>
         </div>
     `
 
     document.body.appendChild(dialog)
+    document.body.style.overflow = 'hidden'
+    
+    // Focus the first button
+    setTimeout(() => {
+        dialog.querySelector('#recovery-restore').focus()
+    }, 10)
+
+    // Handle escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            dialog.remove()
+            document.body.style.overflow = ''
+            document.removeEventListener('keydown', handleEscape)
+            if (previousActiveElement) previousActiveElement.focus()
+            resolve(false)
+        }
+    }
+    document.addEventListener('keydown', handleEscape)
 
     return new Promise((resolve) => {
         dialog.querySelector('#recovery-restore').addEventListener('click', () => {
             dialog.remove()
+            document.body.style.overflow = ''
+            document.removeEventListener('keydown', handleEscape)
+            if (previousActiveElement) previousActiveElement.focus()
             resolve(true)
         })
 
         dialog.querySelector('#recovery-discard').addEventListener('click', () => {
             clearAutoSave(formId)
             dialog.remove()
+            document.body.style.overflow = ''
+            document.removeEventListener('keydown', handleEscape)
+            if (previousActiveElement) previousActiveElement.focus()
             resolve(false)
         })
 
         dialog.querySelector('.recovery-backdrop').addEventListener('click', () => {
             dialog.remove()
+            document.body.style.overflow = ''
+            document.removeEventListener('keydown', handleEscape)
+            if (previousActiveElement) previousActiveElement.focus()
             resolve(false)
         })
     })

@@ -197,7 +197,7 @@ export function attachDevEvents(root) {
 
     try {
       if (activeTab === 'hyperbeam') {
-        const { ao, signer } = await makeAoClient({
+        const { ao, signer, relayUrl, autoRelay } = await makeAoClient({
           jwk: state.jwk,
           publicKey: state.publicKey,
           URL: state.devWallet.muUrl || DEFAULTS.URL,
@@ -208,7 +208,9 @@ export function attachDevEvents(root) {
           ao, signer,
           process: state.devWallet.processId,
           tags: state.devWallet.tags.filter(t => t.name),
-          data: state.devWallet.data || ''
+          data: state.devWallet.data || '',
+          relayUrl,
+          autoRelay
         })
         setState({ sending: false, response: res.result })
       } else {
