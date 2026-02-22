@@ -3,12 +3,19 @@ import { Handle, Position } from 'reactflow';
 
 export function TriggerNode({ data, selected }) {
   return (
-    <div className={`trigger-node ${selected ? 'selected' : ''}`}>
+    <div 
+      className={`trigger-node ${selected ? 'selected' : ''}`}
+      role="article"
+      aria-label={`Trigger node: ${data.label}`}
+      aria-selected={selected}
+    >
       <div className="node-header">
-        <span className="icon">⚡</span>
+        <span className="icon" aria-hidden="true">⚡</span>
         <span className="title">{data.label}</span>
         {data.status && (
-          <span className={`status-badge ${data.status}`}>{data.status}</span>
+          <span className={`status-badge ${data.status}`} aria-label={`Status: ${data.status}`}>
+            {data.status}
+          </span>
         )}
       </div>
       
@@ -54,6 +61,7 @@ export function TriggerNode({ data, selected }) {
         position={Position.Bottom}
         id="output"
         style={{ background: '#10b981' }}
+        aria-label="Trigger output connection"
       />
     </div>
   );

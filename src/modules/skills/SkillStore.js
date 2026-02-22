@@ -2,6 +2,120 @@
 import { getState, setState } from '../../state.js'
 import { makeAoClient } from '../../core/aoClient.js'
 
+// --- REGISTRY PATTERN ---
+
+class SkillRegistry {
+    constructor() {
+        this.cache = new Map()
+        this.listeners = new Set()
+        this.registryProcessId = 'B_B9N28fJ0X9E0j0V6xWJ-3s2_9fN_qK8f_R3V9B8o'
+    }
+
+    subscribe(callback) {
+        this.listeners.add(callback)
+        return () => this.listeners.delete(callback)
+    }
+
+    notify() {
+        this.listeners.forEach(cb => cb())
+    }
+
+    async fetch() {
+        try {
+            const state = getState()
+            const { ao, signer } = await makeAoClient({
+                jwk: state.jwk,
+                publicKey: state.publicKey
+            })
+
+            const result = await ao.message({
+                process: this.registryProcessId,
+                tags: [
+                    { name: 'Action', value: 'ListSkills' }
+                ],
+                signer
+            })
+
+            return this.parseResult(result)
+        } catch (e) {
+            console.warn('[SkillRegistry] Fetch failed, using cache:', e.message)
+            return Array.from(this.cache.values())
+        }
+    }
+
+    async register(name, description, code) {
+        const state = getState()
+        const { ao, signer } = await makeAoClient({
+            jwk: state.jwk,
+            publicKey: state.publicKey
+        })
+
+        await ao.message({
+            process: this.registryProcessId,
+            tags: [
+                { name: 'Action', value: 'Register' },
+                { name: 'Name', value: name },
+                { name: 'Description', value: description }
+            ],
+            data: code,
+            signer
+        })
+
+        const skill = { name, description, publisher: state.address }
+        this.cache.set(name, skill)
+        this.notify()
+        return skill
+    }
+
+    async unregister(name) {
+        const state = getState()
+        const { ao, signer } = await makeAoClient({
+            jwk: state.jwk,
+            publicKey: state.publicKey
+        })
+
+        await ao.message({
+            process: this.registryProcessId,
+            tags: [
+                { name: 'Action', value: 'Unregister' },
+                { name: 'Name', value: name }
+            ],
+            signer
+        })
+
+        this.cache.delete(name)
+        this.notify()
+    }
+
+    get(name) {
+        return this.cache.get(name)
+    }
+
+    list() {
+        return Array.from(this.cache.values())
+    }
+
+    parseResult(result) {
+        const skills = []
+        try {
+            const messages = result?.Messages || []
+            for (const msg of messages) {
+                const data = msg?.Data
+                if (data) {
+                    const parsed = JSON.parse(data)
+                    skills.push(parsed)
+                    this.cache.set(parsed.name, parsed)
+                }
+            }
+        } catch (e) {
+            console.warn('[SkillRegistry] Parse error:', e.message)
+        }
+        return skills
+    }
+}
+
+const registry = new SkillRegistry()
+
 // --- STATE ---
 let storeState = {
     loading: false,
@@ -18,16 +132,7 @@ async function fetchRegistrySkills() {
     render()
 
     try {
-        const state = getState()
-        // TODO: Implement actual Registry pattern
-        // For now, we return empty to avoid confusing the user with mock data
-        storeState.skills = [
-            { Name: 'Registry-Optimizer', Description: 'Automated pruning of stale process assignments.', Publisher: 'AOPRISM-CORE' },
-            { Name: 'State-Auditor', Description: 'Holographic trust verification for ANS-104 data items.', Publisher: 'PROVN-L3' },
-            { Name: 'Mesh-Gate', Description: 'Autonomous relay for HyperBEAM MU endpoints.', Publisher: 'TRANSIT-NET' },
-            { Name: 'Neural-Bridge', Description: 'Secure key isolation and cross-chain execution.', Publisher: 'AO-CRYPTO' }
-        ]
-
+        storeState.skills = await registry.fetch()
     } catch (e) {
         console.error(e)
     } finally {
@@ -41,27 +146,8 @@ async function publishSkill() {
     if (!name || !code) return alert("Name and Code are required!")
 
     try {
-        const state = getState()
-        const { ao, signer } = await makeAoClient({
-            jwk: state.jwk,
-            publicKey: state.publicKey
-        })
-
-        // Real Registry Register Call
-        /*
-        await ao.message({
-            process: REGISTRY_PID,
-            tags: [
-                { name: 'Action', value: 'Register' },
-                { name: 'Name', value: name },
-                { name: 'Description', value: desc }
-            ],
-            data: code,
-            signer
-        })
-        */
-
-        alert(`🚀 Skill "${name}" broadcast to Hive Mind!`)
+        await registry.register(name, desc, code)
+        alert(`🚀 Skill "${name}" registered to Hive Mind!`)
         storeState.showPublishModal = false
         render()
 
@@ -208,3 +294,6 @@ export function attachSkillEvents(root) {
         if (confirm) confirm.onclick = () => publishSkill()
     }
 }
+
+export { registry, SkillRegistry }
+export default { render: renderSkillStore, init: initSkillStore }

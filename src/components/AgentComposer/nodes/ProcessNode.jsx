@@ -3,12 +3,19 @@ import { Handle, Position } from 'reactflow';
 
 export function ProcessNode({ data, selected }) {
   return (
-    <div className={`process-node ${selected ? 'selected' : ''}`}>
+    <div 
+      className={`process-node ${selected ? 'selected' : ''}`}
+      role="article"
+      aria-label={`Process node: ${data.label}`}
+      aria-selected={selected}
+    >
       <div className="node-header">
-        <span className="icon">⚙️</span>
+        <span className="icon" aria-hidden="true">⚙️</span>
         <span className="title">{data.label}</span>
         {data.status && (
-          <span className={`status-badge ${data.status}`}>{data.status}</span>
+          <span className={`status-badge ${data.status}`} aria-label={`Status: ${data.status}`}>
+            {data.status}
+          </span>
         )}
       </div>
       
@@ -40,18 +47,21 @@ export function ProcessNode({ data, selected }) {
         position={Position.Top}
         id="input"
         style={{ background: '#3b82f6' }}
+        aria-label="Process input connection"
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="output"
         style={{ background: '#3b82f6' }}
+        aria-label="Process output connection"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="error"
         style={{ background: '#ef4444' }}
+        aria-label="Error output connection"
       />
     </div>
   );

@@ -6,6 +6,9 @@
 import { getState, setState } from '../../state.js'
 import { makeAoClient, sendAndGetResult } from '../../core/aoClient.js'
 import { renderFormBySchema } from '../../components/FormBuilder.js'
+import { VirtualList } from '../../components/VirtualList.js'
+
+let skillVirtualList = null
 
 async function fetchSkills() {
     const state = getState()
@@ -39,14 +42,31 @@ export function renderSkillHub() {
     `
     }
 
-    const skillCards = state.skills.map(skill => `
-    <div class="skill-card fade-in">
+    const skills = state.skills || []
+    const skillGridId = 'skill-virtual-grid'
+    
+    if (!skillVirtualList) {
+        skillVirtualList = new VirtualList({
+            itemHeight: 200,
+            bufferSize: 3,
+            containerHeight: 500,
+            estimatedHeight: true
+        })
+    }
+    
+    skillVirtualList.setItems(skills)
+    
+    const renderSkillCard = (skill, index) => `
+    <div class="skill-card fade-in" data-skill-index="${index}">
       <div class="skill-badge">${skill.Tags?.find(t => t.name === 'Category')?.value || 'General'}</div>
       <h3 class="skill-name">${skill.Name || 'Unnamed Skill'}</h3>
       <p class="skill-desc">${skill.Description || 'No description provided.'}</p>
       <button class="btn btn-ghost execute-btn" data-id="${skill.Id}">Execute Skill</button>
     </div>
-  `).join('')
+    `
+    
+    const virtualResult = skillVirtualList.render(0)
+    const skillCards = virtualResult.html
 
     return `
     <div class="skill-hub">
@@ -58,7 +78,7 @@ export function renderSkillHub() {
         <button id="refresh-skills-btn" class="btn btn-ghost">Refresh</button>
       </div>
       
-      <div class="skill-grid">
+      <div id="${skillGridId}" class="skill-grid" style="height: 500px; overflow-y: auto; position: relative;">
         ${skillCards || '<div class="card">No skills found in registry.</div>'}
       </div>
       
@@ -70,6 +90,34 @@ export function renderSkillHub() {
 }
 
 export function attachSkillEvents(root) {
+    // Virtual scroll handler for skill grid
+    const skillGrid = root.querySelector('#skill-virtual-grid')
+    if (skillGrid && skillVirtualList) {
+        skillGrid.addEventListener('scroll', () => {
+            const scrollTop = skillGrid.scrollTop
+            const result = skillVirtualList.render(scrollTop)
+            const innerContainer = skillGrid.querySelector('.virtual-list-inner')
+            if (innerContainer) {
+                innerContainer.style.height = `${result.totalHeight}px`
+            }
+            
+            requestAnimationFrame(() => {
+                const items = skillGrid.querySelectorAll('.virtual-list-item')
+                items.forEach(el => {
+                    const index = parseInt(el.dataset.index, 10)
+                    const height = el.getBoundingClientRect().height
+                    if (height > 0 && height !== skillVirtualList.heightMap.get(index)) {
+                        skillVirtualList.updateItemHeight(index, height)
+                        const newResult = skillVirtualList.render(skillGrid.scrollTop)
+                        if (innerContainer) {
+                            innerContainer.style.height = `${newResult.totalHeight}px`
+                        }
+                    }
+                })
+            })
+        }, { passive: true })
+    }
+    
     root.querySelector('#refresh-skills-btn')?.addEventListener('click', () => fetchSkills())
 
     root.querySelectorAll('.execute-btn').forEach(btn => {
@@ -102,7 +150,7 @@ export function attachSkillEvents(root) {
                 try {
                     const state = getState()
                     const { makeAoClient, sendAndGetResult } = await import('../../core/aoClient.js')
-                    const { ao, signer } = await makeAoClient({ jwk: state.jwk, URL: state.url })
+                    const { ao, signer, relayUrl, autoRelay } = await makeAoClient({ jwk: state.jwk, URL: state.url })
 
                     const result = await sendAndGetResult({
                         ao, signer,
@@ -110,7 +158,9 @@ export function attachSkillEvents(root) {
                         tags: [
                             { name: 'Action', value: 'Execute' },
                             { name: 'Arguments', value: JSON.stringify(args) }
-                        ]
+                        ],
+                        relayUrl,
+                        autoRelay
                     })
 
                     resJson.textContent = JSON.stringify(result.result, null, 2)

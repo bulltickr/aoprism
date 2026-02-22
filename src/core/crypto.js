@@ -86,6 +86,70 @@ export async function deriveKeyFromPassword(password, salt) {
 }
 
 /**
+ * Derives a non-reversible audit hash for password verification.
+ */
+export async function derivePasswordAudit(password) {
+    const salt = generateSalt()
+    const crypto = getCrypto().subtle
+    const encoder = new TextEncoder()
+
+    const passwordKey = await crypto.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+    )
+
+    const hashBuffer = await crypto.deriveBits(
+        {
+            name: 'PBKDF2',
+            hash: 'SHA-256',
+            salt: salt,
+            iterations: 100000
+        },
+        passwordKey,
+        256
+    )
+
+    return {
+        salt: arrayBufferToBase64(salt),
+        hash: arrayBufferToBase64(hashBuffer)
+    }
+}
+
+/**
+ * Verifies a password against a stored salt and hash.
+ */
+export async function verifyPassword(password, saltBase64, expectedHashBase64) {
+    const salt = base64ToArrayBuffer(saltBase64)
+    const crypto = getCrypto().subtle
+    const encoder = new TextEncoder()
+
+    const passwordKey = await crypto.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+    )
+
+    const hashBuffer = await crypto.deriveBits(
+        {
+            name: 'PBKDF2',
+            hash: 'SHA-256',
+            salt: salt,
+            iterations: 100000
+        },
+        passwordKey,
+        256
+    )
+
+    const actualHash = arrayBufferToBase64(hashBuffer)
+    return actualHash === expectedHashBase64
+}
+
+/**
  * Encrypts a JSON object.
  * @param {Object} data - The data to encrypt
  * @param {CryptoKey} key - The derived AES key

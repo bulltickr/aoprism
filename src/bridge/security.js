@@ -57,7 +57,7 @@ export class BridgeSecurity {
     }
     
     // Fallback to local verified contracts list
-    return this.verifiedContracts.size > 0;
+    return this.verifiedContracts.has(contractAddress.toLowerCase());
   }
 
   getChainIdFromQuote(quote) {
@@ -77,11 +77,11 @@ export class BridgeSecurity {
     const explorers = {
       1: 'https://api.etherscan.io',
       56: 'https://api.bscscan.com',
-      137: 'api.polygonscan.com',
-      42161: 'api.arbiscan.io',
-      10: 'api-optimistic.etherscan.io',
-      43114: 'api.snowtrace.io',
-      8453: 'api.basescan.org'
+      137: 'https://api.polygonscan.com',
+      42161: 'https://api.arbiscan.io',
+      10: 'https://api-optimistic.etherscan.io',
+      43114: 'https://api.snowtrace.io',
+      8453: 'https://api.basescan.org'
     }
     return explorers[chainId]
   }

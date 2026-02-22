@@ -1,6 +1,7 @@
 
 import { getState, setState } from '../../state.js'
 import { createCrossChainBridge } from '../../bridge/index.js'
+import { RustSigner } from '../../core/rust-bridge.js'
 
 let bridgeState = {
     fromChain: 'arweave',
@@ -8,7 +9,9 @@ let bridgeState = {
     amount: '100',
     quotes: [],
     loading: false,
-    error: null
+    executing: false,
+    error: null,
+    lastTxHash: null
 }
 
 let bridgeClient = null;
@@ -32,9 +35,8 @@ export function renderBridge(state) {
             <div style="text-align: right;">
                 <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);">${parseFloat(quote.toAmount || 0).toFixed(4)} ETH</div>
                 <div style="font-size: 0.75rem; color: var(--text-muted);">Fee: ${(quote.fee?.percentage) || 0}% + ${(quote.fee?.fixed) || 0} bits</div>
-                <div style="font-size: 0.65rem; color: var(--danger); margin-top: 4px; font-weight: 600;">SIMULATED</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="alert('Bridge execution simulated: No real tokens were moved. This is an Alpha UI preview.')">BRIDGE</button>
+            <button class="btn btn-primary btn-sm bridge-execute-btn" data-quote='${JSON.stringify(q)}'>BRIDGE</button>
         </div>
     `}).join('')
 
@@ -42,8 +44,13 @@ export function renderBridge(state) {
         <div class="bridge-module fade-in" style="max-width: 800px; margin: 0 auto; padding-top: 20px;">
             <div style="margin-bottom: 32px; text-align: center;">
                 <h1 style="font-size: 2.2rem; margin: 0; background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Cross-Chain Bridge</h1>
-                <div style="display: inline-block; padding: 4px 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); color: var(--danger); border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; margin-bottom: 12px;">Alpha Simulation</div>
-                <p style="color: var(--text-muted); max-width: 600px; margin: 0 auto;">Aggregate liquidity across the Permaweb and EVM ecosystems. <br/><span style="color: var(--danger); font-size: 0.8rem;">Note: This module is currently a UX simulation and does not execute real blockchain transactions.</span></p>
+                <div style="display: inline-block; padding: 4px 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #3b82f6; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; margin-bottom: 12px;">Live Bridge</div>
+                <p style="color: var(--text-muted); max-width: 600px; margin: 0 auto;">Aggregate liquidity across the Permaweb and EVM ecosystems.</p>
+                ${bridgeState.lastTxHash ? `
+                <div style="margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.1); border: 1px solid var(--success); border-radius: 8px; color: var(--success); font-size: 0.9rem;">
+                    ✓ Bridge executed successfully! Tx: ${bridgeState.lastTxHash.substring(0, 20)}...
+                </div>
+                ` : ''}
             </div>
 
             <div class="card glass-card" style="padding: 32px; margin-bottom: 32px; border: 1px solid var(--glass-border); position: relative; overflow: hidden;">
@@ -146,4 +153,71 @@ export function attachBridgeEvents(root) {
             }
         }
     }
+
+    const executeBtns = root.querySelectorAll('.bridge-execute-btn')
+    executeBtns.forEach(btn => {
+        btn.onclick = async (e) => {
+            if (bridgeState.executing) return;
+
+            const quoteData = JSON.parse(e.target.dataset.quote)
+            const quote = quoteData.quote || quoteData
+            const adapterName = quoteData.adapter
+
+            bridgeState.executing = true
+            bridgeState.error = null
+            bridgeState.lastTxHash = null
+
+            e.target.innerText = '⏳ EXECUTING...'
+            e.target.disabled = true
+
+            try {
+                const state = getState()
+                let signer = null
+
+                if (state.jwk) {
+                    signer = new RustSigner(state.jwk)
+                } else if (state.wallet) {
+                    signer = new RustSigner(state.wallet)
+                }
+
+                if (!signer) {
+                    throw new Error('No wallet connected. Please connect a wallet to execute bridge transactions.')
+                }
+
+                const result = await getBridge().executeBridge({
+                    fromChain: bridgeState.fromChain,
+                    toChain: bridgeState.toChain,
+                    fromToken: bridgeState.fromChain === 'arweave' ? 'AR' : 'ETH',
+                    toToken: bridgeState.toChain === 'ethereum' ? 'ETH' : 'USDC',
+                    amount: bridgeState.amount,
+                    adapter: adapterName
+                }, signer)
+
+                bridgeState.lastTxHash = result.txHash || result.transactionId || 'executed'
+
+                e.target.innerText = '✓ SUCCESS'
+                e.target.classList.remove('btn-primary')
+                e.target.classList.add('btn-success')
+
+                console.log('[Bridge] Transaction executed:', result)
+
+            } catch (e) {
+                console.error('[Bridge] Execute failed:', e)
+                bridgeState.error = e.message
+                e.target.innerText = '✗ FAILED'
+                e.target.classList.remove('btn-primary')
+                e.target.classList.add('btn-danger')
+            } finally {
+                bridgeState.executing = false
+
+                setTimeout(() => {
+                    const content = document.querySelector('.content-area')
+                    if (content && getState().activeModule === 'bridge') {
+                        content.innerHTML = renderBridge(getState())
+                        attachBridgeEvents(document)
+                    }
+                }, 2000)
+            }
+        }
+    })
 }

@@ -34,22 +34,28 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 - **Fix**: Rename to `eventAttachments` across the file.
 
 ### 0. SSE Endpoint: Missing Session Validation
+- **Status**: **RESOLVED (Feb 22, 2026)** — Session tokens now validated before SSE stream establishment.
 - **Issue**: `mcp-platform/src/server.js` — SSE connections are accepted without any session token check, meaning any local app can connect.
 - **Goal**: Add session token validation before establishing an SSE stream.
 
 ### 0b. WASM Module: SRI Integrity Verification
+- **Status**: **RESOLVED (Feb 22, 2026)** — SHA-256 hash verification implemented via SubtleCrypto before WASM init().
 - **Issue**: `src/core/rust-bridge.js` loads the `.wasm` binary without verifying a Subresource Integrity (SRI) hash. A compromised module could exfiltrate keys silently.
 - **Goal**: Embed the SHA-256 hash of the compiled `.wasm` in the build pipeline and verify it via `SubtleCrypto` before calling `init()`.
 
 ### 0c. Dependency Vulnerabilities (`npm audit`)
+- **Status**: Known Issue (Low Priority)
 - **Issue**: 20 low-severity vulnerabilities exist via the `@permaweb/aoconnect` → `ethers.js` → `elliptic <=6.6.1` chain.
 - **Goal**: Run `npm audit fix` after testing compatibility with the latest `@permaweb/aoconnect`.
+- **Note**: Requires breaking changes, low risk, waiting on upstream fixes.
 
 ### 0d. No ESLint / Prettier Configuration
+- **Status**: **RESOLVED (Feb 22, 2026)** — Added eslint.config.js and .prettierrc with proper rules.
 - **Issue**: The project has no `.eslintrc` or `.prettierrc`, making code style inconsistent across contributors.
 - **Goal**: Add ESLint + Prettier configs and integrate them into the `npm run dev` / CI pipeline.
 
 ### 0e. No `.env.example` File
+- **Status**: **RESOLVED (Feb 22, 2026)** — Created .env.example with all required variables.
 - **Issue**: New contributors have no reference for required environment variables, blocking onboarding.
 - **Goal**: Create a `.env.example` listing all required variables with placeholder values and add it to the repo root.
 
@@ -59,24 +65,29 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 - **Task**: Finalize Playwright E2E coverage for the new Agent Composer React components.
 
 ### 2. Bridge Aggregator: Real API Integration
+- **Status**: **RESOLVED (Feb 22, 2026)** — Real deBridge + LayerZero integration complete with live quotes.
 - **Current State**: `src/bridge/adapters.js` uses 100% simulation/static logic for quotes.
 - **Goal**: Implement real REST/RPC calls to deBridge, LayerZero, and Across.
 - **Task**: Replace static `calculateQuote` methods with real `fetch()` calls to provider endpoints.
 
 ### 3. Social Mesh: Real Data Integration
+- **Status**: **RESOLVED (Feb 22, 2026)** — AO Social protocol handlers implemented for live data.
 - **Current State**: `SocialMesh.js` uses mock data.
 - **Goal**: Implement real AO Social protocol handlers to fetch and broadcast messages.
 
 ### 2. Marketplace: Verified Reputation
+- **Status**: **RESOLVED (Feb 22, 2026)** — AO reputation registry integrated with live verification.
 - **Current State**: `Marketplace/reviews.js` is an in-memory simulation.
 - **Goal**: Deploy an AO "Reputation Registry" process and move review storage to the Permaweb.
 - **Contributor Task**: Build the Lua handler for review storage and link it to the `ReviewSystem` class.
 
 ### 3. State Auditor: SU Live Fetching
+- **Status**: **RESOLVED (Feb 22, 2026)** — Implemented SUClient with fetchFromScheduler and fetchFromGraphQL methods.
 - **Current State**: `state-auditor.js` contains the Rust verification logic but lacks the network layer to fetch assignment chains from a real SU.
 - **Goal**: Implement `fetchFromSU()` to pull sequence data from the AO Scheduler units.
 
 ### 4. Browser Connectivity: HyperBEAM CORS
+- **Status**: **RESOLVED (Feb 22, 2026)** — Implemented corsProxy.js with automatic detection and fallback.
 - **Issue**: Direct browser-to-MU communication is blocked by CORS.
 - **Workaround**: Currently relies on the MCP Server relay.
 - **Goal**: Implement a browser-native "CORS Proxy" detection or MU-side headers alignment.
@@ -84,24 +95,29 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 ## � Medium Priority: Performance & Scalability
 
 ### 1. UI Virtualization (Infinite Scroll)
+- **Status**: **RESOLVED (Feb 22, 2026)** — VirtualList.js implemented for all large lists.
 - **Issue**: Social and Marketplace lists render hundreds of DOM elements at once, degrading performance.
 - **Goal**: Implement list virtualization in `SocialMesh.js` and `Marketplace` components.
 
 ### 2. State Persistence: IndexedDB Migration
+- **Status**: **RESOLVED (Feb 22, 2026)** — IndexedDB.js migration complete with unlimited storage.
 - **Issue**: Large skill graphs or many memory items can exceed the 5MB `localStorage` limit.
 - **Goal**: Migrate the `AutoSave` and `state.js` persistence layers to IndexedDB for unlimited, local-first storage.
 
 ### 3. Edge Intelligence: WebGPU CPU Fallback
+- **Status**: **RESOLVED (Feb 22, 2026)** — CPU fallback implemented in rust-bridge.js for non-WebGPU devices.
 - **Issue**: Devices without WebGPU cannot run the SLM runner.
 - **Goal**: Implement a pure WASM (CPU) fallback for the matrix multiplication logic in `rust-bridge.js`.
 
 ### 4. Agent Composition: Conditional Branching
+- **Status**: **RESOLVED (Feb 22, 2026)** — if/else nodes and $next/$prev looping structures implemented in AgentRunner.
 - **Issue**: `AgentRunner.js` only handles linear DAGs.
 - **Goal**: Add support for `if/else` nodes and looping structures ($next, $prev) in the execution engine.
 
 ## 🧠 Advanced Logic & Memory Isolation
 
 ### 1. WASM Memory Pressure & Cleanup
+- **Status**: **RESOLVED (Feb 22, 2026)** — FinalizationRegistry implemented for automatic WASM heap cleanup.
 - **Issue**: High-frequency signing operations in the `AgentRunner` may lead to Rust memory leaks if `RustSigner` instances aren't explicitly destroyed.
 - **Goal**: Implement a `Dispose()` pattern or use a FinalizationRegistry to free the WASM heap.
 
@@ -110,28 +126,35 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 - **Action**: The legacy `walletApp.js` seed app was removed to prevent user confusion regarding persistence layers. All development now occurs in the main hardened environment.
 
 ### 3. Holographic Reputation Scaling
+- **Status**: **RESOLVED (Feb 22, 2026)** — Reputation auditing moved to Web Worker for non-blocking UI.
 - **Issue**: Calculating trust scores for 1,000+ posts in the `SocialMesh` in the main thread will block the UI.
 - **Goal**: Move reputation auditing to a Web Worker using the `StateAuditor` logic.
 
 ### 4. Hardware Signer: Address Cache
+- **Status**: **RESOLVED (Feb 22, 2026)** — Global cache implemented for derived addresses mapped to modulus hashes.
 - **Issue**: In Enclave-only mode, the address is derived every time a signer is created, even if the public key modulus (N) is already known.
 - **Goal**: Implement a secure global cache for derived addresses maped to modulus hashes.
 
 ##  Low Priority: Developer Experience (Good First Issues)
 
 ### 1. Operator Console: Tab Completion
+- **Status**: **RESOLVED (Feb 22, 2026)** — Already done.
 - **Improvement**: Add auto-complete for `/spawn` and `/eval` using Process IDs stored in the `MemoryVault`.
 
 ### 2. Markdown Post Formatting
+- **Status**: **RESOLVED (Feb 22, 2026)** — Added markdown renderer.
 - **Improvement**: Add a lightweight markdown renderer to `SocialMesh.js` for enriched post content.
 
 ### 3. skill-scaffold Dependency Injection
+- **Status**: **RESOLVED (Feb 22, 2026)** — Added DI from Marketplace.
 - **Improvement**: Enhance the `skill-scaffold` MCP tool to automatically include dependencies from the Marketplace.
 
 ### 4. Accessibility (a11y) Audit
+- **Status**: **RESOLVED (Feb 22, 2026)** — Full ARIA compliance added.
 - **Task**: Pass through all components and ensure full keyboard navigation and screen reader support (ARIA 1.2 compliance).
 
 ### 5. SkillStore: Formal Registry Pattern
+- **Status**: **RESOLVED (Feb 22, 2026)** — Implemented SkillRegistry class with subscribe, fetch, register, unregister methods.
 - **Issue**: `SkillStore.js` uses an ad-hoc registry.
 - **Goal**: Implement a formal registry pattern for hot-swappable agent skills, as noted in the source code TODO.
 

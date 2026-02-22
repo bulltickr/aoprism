@@ -1,7 +1,8 @@
 // [PHASE 3] Static imports removed for bundle optimization.
 // These are now loaded dynamically within their respective functions.
 import { DEFAULTS } from './config.js'
-import { RustSigner } from './rust-bridge.js'
+import { RustSigner, getCachedAddress } from './rust-bridge.js'
+import { detectCorsSupport, useRelay, getConnectionMethod, logConnectionMethod, setupCorsDetection, CONNECTION_METHOD } from './corsProxy.js'
 
 function bytesToB64Url(bytes) {
   const b64 = bytesToB64(bytes)
@@ -49,8 +50,8 @@ function createBrowserJwkSigner(jwk, publicKey = null) {
 
   if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available (crypto.subtle missing).')
 
-  // Initialize lazily. 
-  const addressPromise = jwk ? jwkToAddress(jwk) : Promise.resolve(null)
+  // Initialize lazily. Use cached address derivation for performance
+  const addressPromise = jwk ? jwkToAddress(jwk) : (effectivePublicKey ? getCachedAddress(effectivePublicKey) : Promise.resolve(null))
   const httpSigKeyPromise = jwk ? importHttpSigKey(jwk) : Promise.resolve(null)
 
   // Swapped ArweaveSigner for RustSigner (WASM)
@@ -92,10 +93,16 @@ function createBrowserJwkSigner(jwk, publicKey = null) {
 
       const dataToSign = await create({
         type: 1,
-        publicKey: jwk.n,
+        publicKey: useEnclave ? effectivePublicKey : jwk.n,
         address,
         alg: 'rsa-pss-sha512'
       })
+
+      if (useEnclave) {
+        const { rustBridge } = await import('./rust-bridge.js')
+        const sig = await rustBridge.enclaveSign(dataToSign) // enclaveSign handles PSS
+        return { signature: sig, address }
+      }
 
       const sig = await crypto.subtle.sign({ name: 'RSA-PSS', saltLength: 64 }, key, dataToSign)
       return { signature: new Uint8Array(sig), address }
@@ -132,13 +139,7 @@ function normalizeTags(tags) {
 }
 
 function isDebug() {
-  try {
-    const url = new URL(window.location.href)
-    if (url.searchParams.get('debug') === '1') return true
-    return localStorage.getItem('hb-demo-wallet:debug') === '1'
-  } catch {
-    return false
-  }
+  return false;
 }
 
 function previewData(data, maxLen = 600) {
@@ -274,22 +275,33 @@ export async function withRetry(fn, maxRetries = 3, delay = 1000) {
 }
 
 // HyperBEAM client (mainnet with MODE flag)
-export async function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk, publicKey }) {
+export async function makeAoClient({ URL, SCHEDULER, CU_URL, MODE, jwk, publicKey, RELAY_URL, AUTO_RELAY }) {
   installFetchDebug()
   const signer = createBrowserJwkSigner(jwk, publicKey)
 
   const { connect, dryrun } = await import('@permaweb/aoconnect/browser')
 
+  const muUrl = URL ?? DEFAULTS.URL
+  const scheduler = SCHEDULER ?? DEFAULTS.SCHEDULER
+  const relayUrl = RELAY_URL ?? DEFAULTS.RELAY_URL
+  const autoRelay = AUTO_RELAY ?? DEFAULTS.AUTO_RELAY
+
+  // Setup CORS detection in background
+  setupCorsDetection(muUrl, scheduler)
+
+  // Log connection method after a brief delay to let detection complete
+  setTimeout(() => logConnectionMethod(), 1000)
+
   // HyperBEAM uses MODE flag for mainnet
   const ao = connect({
     MODE: MODE ?? DEFAULTS.MODE,
     signer,
-    URL: URL ?? DEFAULTS.URL,
-    SCHEDULER: SCHEDULER ?? DEFAULTS.SCHEDULER,
+    URL: muUrl,
+    SCHEDULER: scheduler,
     CU_URL: CU_URL ?? undefined
   })
 
-  return { ao, signer }
+  return { ao, signer, relayUrl, autoRelay }
 }
 
 // LegacyNet client (just creates signer - message/result use default nodes)
@@ -297,6 +309,10 @@ export async function makeAoClientLegacy({ jwk }) {
   installFetchDebug()
   const { createDataItemSigner } = await import('@permaweb/aoconnect')
   const signer = createDataItemSigner(jwk)
+
+  // LegacyNet typically works without CORS issues (uses default nodes)
+  _connectionMethod = CONNECTION_METHOD.DIRECT
+
   return { signer }
 }
 
@@ -357,7 +373,24 @@ function formatErrorForHumans(label, err, httpDetails) {
   return bits.join('\n')
 }
 
-export async function sendAndGetResult({ ao, signer, process, tags, data }) {
+function isCorsError(err) {
+  const msg = String(err?.message ?? '').toLowerCase()
+  return msg.includes('cors') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('access-control')
+}
+
+function formatCorsAdvice(err) {
+  if (isCorsError(err)) {
+    return '\n\n💡 Tip: If you see CORS errors, try:\n' +
+      '1. Running the MCP server (local relay): npm run mcp\n' +
+      '2. Or configure RELAY_URL in your settings'
+  }
+  return ''
+}
+
+export async function sendAndGetResult({ ao, signer, process, tags, data, relayUrl, autoRelay }) {
   let messageId = null
   try {
     const normalized = normalizeTags(tags)
@@ -372,6 +405,8 @@ export async function sendAndGetResult({ ao, signer, process, tags, data }) {
     messageId = await ao.message({ process, tags: normalized, data, signer })
   } catch (e) {
     const httpDetails = await tryExtractHttpDetails(e)
+    const isCors = isCorsError(e)
+
     console.error('[Demo-Wallet] ao.message failed', {
       process,
       tags: normalizeTags(tags),
@@ -380,9 +415,12 @@ export async function sendAndGetResult({ ao, signer, process, tags, data }) {
       cause: e?.cause,
       causeMessage: e?.cause?.message,
       httpDetails,
-      keys: e ? Object.getOwnPropertyNames(e) : null
+      keys: e ? Object.getOwnPropertyNames(e) : null,
+      isCors
     })
-    throw new Error(formatErrorForHumans('AO message failed', e, httpDetails), { cause: e })
+
+    const corsAdvice = isCors ? formatCorsAdvice(e) : ''
+    throw new Error(formatErrorForHumans('AO message failed', e, httpDetails) + corsAdvice, { cause: e })
   }
 
   try {
@@ -390,6 +428,8 @@ export async function sendAndGetResult({ ao, signer, process, tags, data }) {
     return { messageId, result: res }
   } catch (e) {
     const httpDetails = await tryExtractHttpDetails(e)
+    const isCors = isCorsError(e)
+
     console.error('[Demo-Wallet] ao.result failed', {
       process,
       messageId,
@@ -398,9 +438,12 @@ export async function sendAndGetResult({ ao, signer, process, tags, data }) {
       cause: e?.cause,
       causeMessage: e?.cause?.message,
       httpDetails,
-      keys: e ? Object.getOwnPropertyNames(e) : null
+      keys: e ? Object.getOwnPropertyNames(e) : null,
+      isCors
     })
-    throw new Error(formatErrorForHumans('AO result failed', e, httpDetails), { cause: e })
+
+    const corsAdvice = isCors ? formatCorsAdvice(e) : ''
+    throw new Error(formatErrorForHumans('AO result failed', e, httpDetails) + corsAdvice, { cause: e })
   }
 }
 
@@ -417,7 +460,7 @@ export async function sendAndGetResultLegacy({ signer, process, tags, data }) {
       })
     }
 
-    // Use dryrun for instant response (no message/result needed)
+    const { dryrun } = await import('@permaweb/aoconnect/browser')
     const res = await dryrun({
       process,
       tags: normalized,

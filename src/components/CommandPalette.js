@@ -256,6 +256,8 @@ class CommandPalette {
         this.isOpen = false
         this.selectedIndex = 0
         this.filteredCommands = commands
+        this.previousActiveElement = null
+        this.lastFocusedIndex = -1
         
         this.init()
     }
@@ -265,16 +267,36 @@ class CommandPalette {
         this.element = document.createElement('div')
         this.element.className = 'command-palette'
         this.element.style.display = 'none'
+        this.element.setAttribute('role', 'dialog')
+        this.element.setAttribute('aria-modal', 'true')
+        this.element.setAttribute('aria-label', 'Command palette')
+        this.element.id = 'command-palette'
         this.element.innerHTML = `
-            <div class="palette-overlay"></div>
-            <div class="palette-container">
+            <div class="palette-overlay" aria-hidden="true"></div>
+            <div class="palette-container" role="presentation">
                 <div class="palette-input-wrapper">
-                    <span class="palette-icon">⌘</span>
-                    <input type="text" class="palette-input" placeholder="Type a command or search..." autocomplete="off">
-                    <span class="palette-shortcut">ESC to close</span>
+                    <span class="palette-icon" aria-hidden="true">⌘</span>
+                    <label for="palette-search-input" class="visually-hidden">Search commands</label>
+                    <input 
+                        type="text" 
+                        id="palette-search-input"
+                        class="palette-input" 
+                        placeholder="Type a command or search..." 
+                        autocomplete="off"
+                        role="combobox"
+                        aria-expanded="false"
+                        aria-controls="palette-results"
+                        aria-activedescendant=""
+                    >
+                    <span class="palette-shortcut" aria-hidden="true">ESC to close</span>
                 </div>
-                <div class="palette-list"></div>
-                <div class="palette-footer">
+                <div 
+                    id="palette-results"
+                    class="palette-list" 
+                    role="listbox" 
+                    aria-label="Commands"
+                ></div>
+                <div class="palette-footer" aria-hidden="true">
                     <span><kbd>↑</kbd> <kbd>↓</kbd> to navigate</span>
                     <span><kbd>↵</kbd> to select</span>
                 </div>
@@ -301,6 +323,7 @@ class CommandPalette {
             }
             // ESC to close
             if (e.key === 'Escape' && this.isOpen) {
+                e.stopPropagation()
                 this.close()
             }
             // Cmd+Shift+P (VS Code style)
@@ -311,7 +334,26 @@ class CommandPalette {
         })
     }
     
+    trapFocus(e) {
+        if (!this.isOpen) return
+        
+        const focusableElements = this.element.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
+        
+        if (e.shiftKey && document.activeElement === firstElement) {
+            e.preventDefault()
+            lastElement.focus()
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+            e.preventDefault()
+            firstElement.focus()
+        }
+    }
+    
     open() {
+        this.previousActiveElement = document.activeElement
         this.isOpen = true
         this.element.style.display = 'block'
         this.input.value = ''
@@ -323,14 +365,28 @@ class CommandPalette {
         // Add active class for animation
         setTimeout(() => {
             this.element.classList.add('active')
+            this.input.setAttribute('aria-expanded', 'true')
         }, 10)
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden'
     }
     
     close() {
         this.isOpen = false
         this.element.classList.remove('active')
+        this.input.setAttribute('aria-expanded', 'false')
+        
+        // Restore body scroll
+        document.body.style.overflow = ''
+        
         setTimeout(() => {
             this.element.style.display = 'none'
+            // Restore focus to previous element
+            if (this.previousActiveElement) {
+                this.previousActiveElement.focus()
+                this.previousActiveElement = null
+            }
         }, 200)
     }
     
@@ -356,17 +412,43 @@ class CommandPalette {
                 this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredCommands.length - 1)
                 this.render()
                 this.scrollToSelected()
+                this.updateActiveDescendant()
                 break
             case 'ArrowUp':
                 e.preventDefault()
                 this.selectedIndex = Math.max(this.selectedIndex - 1, 0)
                 this.render()
                 this.scrollToSelected()
+                this.updateActiveDescendant()
+                break
+            case 'Home':
+                e.preventDefault()
+                this.selectedIndex = 0
+                this.render()
+                this.scrollToSelected()
+                this.updateActiveDescendant()
+                break
+            case 'End':
+                e.preventDefault()
+                this.selectedIndex = this.filteredCommands.length - 1
+                this.render()
+                this.scrollToSelected()
+                this.updateActiveDescendant()
                 break
             case 'Enter':
                 e.preventDefault()
                 this.executeSelected()
                 break
+            case 'Tab':
+                this.trapFocus(e)
+                break
+        }
+    }
+    
+    updateActiveDescendant() {
+        const items = this.list.querySelectorAll('.palette-item')
+        if (items[this.selectedIndex]) {
+            this.input.setAttribute('aria-activedescendant', `palette-item-${this.selectedIndex}`)
         }
     }
     
@@ -389,7 +471,7 @@ class CommandPalette {
     render() {
         if (this.filteredCommands.length === 0) {
             this.list.innerHTML = `
-                <div class="palette-empty">
+                <div class="palette-empty" role="status" aria-live="polite">
                     No commands found
                     <br>
                     <small>Try different keywords</small>
@@ -399,12 +481,22 @@ class CommandPalette {
         }
         
         this.list.innerHTML = this.filteredCommands.map((cmd, index) => `
-            <div class="palette-item ${index === this.selectedIndex ? 'selected' : ''}" data-index="${index}">
-                <span class="palette-item-icon">${cmd.icon}</span>
+            <div 
+                class="palette-item ${index === this.selectedIndex ? 'selected' : ''}" 
+                data-index="${index}"
+                id="palette-item-${index}"
+                role="option"
+                aria-selected="${index === this.selectedIndex}"
+                tabindex="${index === this.selectedIndex ? 0 : -1}"
+            >
+                <span class="palette-item-icon" aria-hidden="true">${cmd.icon}</span>
                 <span class="palette-item-label">${cmd.label}</span>
                 <span class="palette-item-shortcut">${cmd.shortcut}</span>
             </div>
         `).join('')
+        
+        // Announce count to screen readers
+        this.input.setAttribute('aria-resultcount', this.filteredCommands.length)
         
         // Click handlers
         this.list.querySelectorAll('.palette-item').forEach((item, index) => {
@@ -415,6 +507,12 @@ class CommandPalette {
             item.addEventListener('mouseenter', () => {
                 this.selectedIndex = index
                 this.render()
+            })
+            item.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    this.executeSelected()
+                }
             })
         })
     }

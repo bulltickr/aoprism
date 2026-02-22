@@ -60,6 +60,7 @@ class McpBridge {
      * 🛡️ PERFORMS SECURITY CHECK (The Human Firewall)
      */
     async executeTool(toolName, args, sessionId) {
+        if (!sessionId) throw new Error("sessionId is required for neural bridge execution")
         if (!this.isConnected) throw new Error("Neural Bridge not connected. Run 'npm run dev' in mcp-platform.")
 
         // 1. THE HUMAN FIREWALL 🛡️
@@ -73,7 +74,7 @@ class McpBridge {
         console.log(`[Neural Bridge] executing ${toolName}...`, args)
 
         try {
-            const response = await fetch(`${this.baseUrl}/messages?sessionId=${sessionId || 'demo-session'}`, {
+            const response = await fetch(`${this.baseUrl}/messages?sessionId=${sessionId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

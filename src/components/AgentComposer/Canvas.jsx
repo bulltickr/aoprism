@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -138,7 +138,13 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
   }, [selectedNode, setNodes]);
 
   return (
-    <div className="agent-composer" style={{ width: '100%', height: '100%' }} ref={reactFlowWrapper}>
+    <div 
+      className="agent-composer" 
+      style={{ width: '100%', height: '100%' }} 
+      ref={reactFlowWrapper}
+      role="application"
+      aria-label="Agent workflow composer. Use keyboard to add nodes."
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -158,9 +164,10 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
         attributionPosition="bottom-left"
         connectionMode={ConnectionMode.Loose}
         deleteKeyCode={['Backspace', 'Delete']}
+        aria-label="Agent workflow canvas"
       >
         <Background color="#94a3b8" gap={15} size={1} />
-        <Controls />
+        <Controls aria-label="Canvas controls" />
         <MiniMap
           nodeStrokeColor={(n) => {
             if (n.type === 'process') return '#3b82f6';
@@ -174,14 +181,24 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
             if (n.type === 'action') return '#fef3c7';
             return '#f1f5f9';
           }}
+          aria-label="Mini map of workflow"
         />
-        <Panel position="top-left" className="composer-toolbar">
+        <Panel position="top-left" className="composer-toolbar" aria-label="Node toolbar">
           <div className="toolbar-section">
-            <h4>Add Nodes (Drag)</h4>
+            <h4 id="toolbar-add-nodes">Add Nodes (Drag)</h4>
             <div
               className="dnd-node trigger"
               onDragStart={(event) => onDragStart(event, 'trigger')}
               draggable
+              role="button"
+              tabIndex={0}
+              aria-label="Add trigger node, press Enter to add"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  addNode('trigger')
+                }
+              }}
             >
               Trigger
             </div>
@@ -189,6 +206,15 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
               className="dnd-node process"
               onDragStart={(event) => onDragStart(event, 'process')}
               draggable
+              role="button"
+              tabIndex={0}
+              aria-label="Add process node, press Enter to add"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  addNode('process')
+                }
+              }}
             >
               Process
             </div>
@@ -196,28 +222,50 @@ export function AgentComposerCanvas({ initialNodes = [], initialEdges = [], onCh
               className="dnd-node action"
               onDragStart={(event) => onDragStart(event, 'action')}
               draggable
+              role="button"
+              tabIndex={0}
+              aria-label="Add action node, press Enter to add"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  addNode('action')
+                }
+              }}
             >
               Action
             </div>
           </div>
           <div className="toolbar-section">
-            <h4>Quick Add</h4>
-            <button className="btn btn-primary" onClick={() => addNode('trigger')}>
+            <h4 id="toolbar-quick-add">Quick Add</h4>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => addNode('trigger')}
+              aria-describedby="toolbar-quick-add"
+            >
               + Trigger
             </button>
-            <button className="btn btn-primary" onClick={() => addNode('process')}>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => addNode('process')}
+              aria-describedby="toolbar-quick-add"
+            >
               + Process
             </button>
-            <button className="btn btn-primary" onClick={() => addNode('action')}>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => addNode('action')}
+              aria-describedby="toolbar-quick-add"
+            >
               + Action
             </button>
           </div>
           {selectedNode && (
-            <div className="toolbar-section">
-              <h4>Selected: {selectedNode.data.label}</h4>
+            <div className="toolbar-section" role="region" aria-label="Selected node details">
+              <h4 id="selected-node-label">Selected: {selectedNode.data.label}</h4>
               <button
                 className="btn btn-danger"
                 onClick={() => deleteNode(selectedNode.id)}
+                aria-describedby="selected-node-label"
               >
                 Delete Node
               </button>

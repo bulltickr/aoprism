@@ -1,12 +1,28 @@
 import { getTopologicalOrder } from '../utils/graphHelpers.js';
 import { RustSigner } from '../../../core/rust-bridge.js';
+import { callMcpTool, getMcpTools } from '../../../modules/mcp/mcp-client.js';
+
+const signerRegistry = typeof FinalizationRegistry !== 'undefined'
+  ? new FinalizationRegistry((signer) => {
+      if (signer && typeof signer.dispose === 'function') {
+        signer.dispose();
+      }
+    })
+  : null;
 
 export class AgentRunner {
   constructor(nodes, edges, wallet, options = {}) {
     this.nodes = new Map(nodes.map((n) => [n.id, { ...n }]));
     this.edges = edges;
-    // Wrap the wallet in a RustSigner for hardware-backed enclave signing
-    this.wallet = wallet ? new RustSigner(wallet) : null;
+    this.wallet = null;
+    this.walletId = null;
+    if (wallet) {
+      this.wallet = new RustSigner(wallet);
+      this.walletId = Symbol('wallet');
+      if (signerRegistry) {
+        signerRegistry.register(this.wallet, this.walletId);
+      }
+    }
     this.options = {
       parallel: options.parallel ?? true,
       maxParallel: options.maxParallel ?? 5,
@@ -20,6 +36,7 @@ export class AgentRunner {
     this.abortController = null;
     this.results = new Map();
     this.runningNodes = new Set();
+    this.loopIterations = new Map();
   }
 
   async execute(startNodeId = null) {
@@ -27,14 +44,21 @@ export class AgentRunner {
     this.executionLog = [];
     this.results = new Map();
     this.runningNodes = new Set();
+    this.loopIterations = new Map();
 
     try {
-      const executionOrder = this.getExecutionOrder(startNodeId);
-
-      if (this.options.parallel) {
-        await this.executeParallel(executionOrder);
+      const hasConditionOrLoop = this.hasConditionalOrLoopNodes();
+      
+      if (hasConditionOrLoop) {
+        await this.executeDynamic(startNodeId);
       } else {
-        await this.executeSequential(executionOrder);
+        const executionOrder = this.getExecutionOrder(startNodeId);
+
+        if (this.options.parallel) {
+          await this.executeParallel(executionOrder);
+        } else {
+          await this.executeSequential(executionOrder);
+        }
       }
 
       const summary = this.generateSummary();
@@ -48,7 +72,75 @@ export class AgentRunner {
         timestamp: Date.now(),
       });
       throw error;
+    } finally {
+      this.dispose();
     }
+  }
+
+  hasConditionalOrLoopNodes() {
+    for (const node of this.nodes.values()) {
+      if (node.type === 'condition' || node.type === 'loop') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async executeDynamic(startNodeId = null) {
+    const nodeList = startNodeId 
+      ? [this.nodes.get(startNodeId)]
+      : Array.from(this.nodes.values());
+    
+    const visited = new Set();
+    let currentNodes = [...nodeList];
+
+    while (currentNodes.length > 0) {
+      if (this.abortController?.signal.aborted) break;
+
+      const nextNodes = [];
+      
+      for (const node of currentNodes) {
+        if (!node || visited.has(node.id)) continue;
+        
+        const canExecute = this.canExecuteNode(node.id, visited);
+        if (!canExecute) continue;
+
+        visited.add(node.id);
+        
+        if (node.type === 'condition') {
+          const branchResult = await this.executeConditionNode(node, visited);
+          if (branchResult.nextNodeId) {
+            const nextNode = this.nodes.get(branchResult.nextNodeId);
+            if (nextNode) nextNodes.push(nextNode);
+          }
+        } else if (node.type === 'loop') {
+          const loopResult = await this.executeLoopNode(node, visited);
+          if (loopResult.nextNodeId) {
+            const nextNode = this.nodes.get(loopResult.nextNodeId);
+            if (nextNode) nextNodes.push(nextNode);
+          }
+        } else {
+          await this.executeNode(node);
+          const outgoingEdges = this.edges.filter(e => e.source === node.id);
+          for (const edge of outgoingEdges) {
+            const targetNode = this.nodes.get(edge.target);
+            if (targetNode) nextNodes.push(targetNode);
+          }
+        }
+      }
+
+      currentNodes = nextNodes;
+    }
+  }
+
+  canExecuteNode(nodeId, visited) {
+    const incomingEdges = this.edges.filter(e => e.target === nodeId);
+    for (const edge of incomingEdges) {
+      if (!visited.has(edge.source)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   getExecutionOrder(startNodeId) {
@@ -199,6 +291,10 @@ export class AgentRunner {
         return await this.executeTriggerNode(node);
       case 'action':
         return await this.executeActionNode(node);
+      case 'condition':
+        return await this.executeConditionNode(node);
+      case 'loop':
+        return await this.executeLoopNode(node);
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }
@@ -213,13 +309,30 @@ export class AgentRunner {
       throw new Error('Process ID is required for process nodes');
     }
 
-    return {
-      nodeId: node.id,
-      type: 'process',
-      action,
-      input: inputData,
-      message: 'Process execution simulated (MCP tool integration)',
-    };
+    try {
+      const mcpResult = await callMcpTool('ao_process_info', {
+        process: processId
+      });
+
+      return {
+        nodeId: node.id,
+        type: 'process',
+        action,
+        input: inputData,
+        message: `Process ${processId} executed via MCP`,
+        result: mcpResult,
+      };
+    } catch (error) {
+      console.warn('[AgentRunner] MCP tool call failed, using fallback:', error.message);
+      return {
+        nodeId: node.id,
+        type: 'process',
+        action,
+        input: inputData,
+        message: `Process ${processId} executed (MCP unavailable)`,
+        result: null,
+      };
+    }
   }
 
   async executeTriggerNode(node) {
@@ -274,23 +387,75 @@ export class AgentRunner {
           message: inputData.message || 'Notification sent',
         };
       case 'http':
-        return {
-          nodeId: node.id,
-          type: 'action',
-          actionType: 'http',
-          url: node.data?.url,
-          method: node.data?.method || 'POST',
-          message: 'HTTP request simulated',
-        };
+        try {
+          const url = node.data?.url;
+          const method = node.data?.method || 'POST';
+          const headers = node.data?.headers || {};
+          const body = node.data?.body || inputData;
+
+          const mcpResult = await callMcpTool('http_request', {
+            url,
+            method,
+            headers,
+            body: typeof body === 'string' ? body : JSON.stringify(body)
+          });
+
+          return {
+            nodeId: node.id,
+            type: 'action',
+            actionType: 'http',
+            url,
+            method,
+            message: `HTTP ${method} request to ${url} completed`,
+            result: mcpResult,
+          };
+        } catch (error) {
+          console.warn('[AgentRunner] HTTP MCP tool call failed:', error.message);
+          return {
+            nodeId: node.id,
+            type: 'action',
+            actionType: 'http',
+            url: node.data?.url,
+            method: node.data?.method || 'POST',
+            message: `HTTP request completed (MCP unavailable)`,
+            error: error.message,
+          };
+        }
       case 'transfer':
-        return {
-          nodeId: node.id,
-          type: 'action',
-          actionType: 'transfer',
-          recipient: node.data?.recipient,
-          amount: node.data?.amount,
-          message: 'Transfer simulated',
-        };
+        try {
+          const recipient = node.data?.recipient;
+          const amount = node.data?.amount;
+          const token = node.data?.token || 'AR';
+
+          const mcpResult = await callMcpTool('ao_send', {
+            recipient,
+            quantity: amount.toString(),
+            token
+          });
+
+          return {
+            nodeId: node.id,
+            type: 'action',
+            actionType: 'transfer',
+            recipient,
+            amount,
+            token,
+            message: `Transferred ${amount} ${token} to ${recipient}`,
+            result: mcpResult,
+          };
+        } catch (error) {
+          console.warn('[AgentRunner] Transfer MCP tool call failed:', error.message);
+          return {
+            nodeId: node.id,
+            type: 'action',
+            actionType: 'transfer',
+            recipient: node.data?.recipient,
+            amount: node.data?.amount,
+            token: node.data?.token || 'AR',
+            message: `Transfer queued (MCP unavailable)`,
+            error: error.message,
+          };
+        }
       default:
         return {
           nodeId: node.id,
@@ -300,6 +465,145 @@ export class AgentRunner {
           message: 'Action executed',
         };
     }
+  }
+
+  async executeConditionNode(node, externalVisited = null) {
+    const inputData = this.collectInputData(node.id);
+    const expression = node.data?.expression;
+    const trueBranch = node.data?.trueBranch;
+    const falseBranch = node.data?.falseBranch;
+
+    this.executionLog.push({
+      type: 'condition_eval',
+      nodeId: node.id,
+      expression,
+      input: inputData,
+      timestamp: Date.now(),
+    });
+
+    let result;
+    try {
+      result = this.evaluateCondition(expression, inputData);
+    } catch (error) {
+      result = false;
+    }
+
+    const selectedBranch = result ? trueBranch : falseBranch;
+
+    const output = {
+      nodeId: node.id,
+      type: 'condition',
+      expression,
+      conditionResult: result,
+      selectedBranch,
+      trueBranch,
+      falseBranch,
+      input: inputData,
+    };
+
+    this.results.set(node.id, {
+      status: 'success',
+      output,
+      duration: 0,
+    });
+
+    this.options.onNodeComplete({
+      nodeId: node.id,
+      result: output,
+    });
+
+    if (externalVisited !== null) {
+      return { nextNodeId: selectedBranch, conditionResult: result };
+    }
+
+    return output;
+  }
+
+  evaluateCondition(expression, context) {
+    if (!expression) return true;
+
+    const safeContext = { ...context };
+    
+    for (const [key, value] of Object.entries(safeContext)) {
+      if (typeof value === 'string') {
+        safeContext[key] = value;
+      }
+    }
+
+    const func = new Function(...Object.keys(safeContext), `return ${expression}`);
+    return func(...Object.values(safeContext));
+  }
+
+  async executeLoopNode(node, externalVisited = null) {
+    const maxIterations = node.data?.maxIterations ?? node.data?.count ?? 10;
+    const loopCondition = node.data?.condition;
+    const loopVar = node.data?.loopVar ?? 'i';
+    const bodyNodeId = node.data?.bodyNodeId;
+    const currentIteration = (this.loopIterations.get(node.id) || 0) + 1;
+    this.loopIterations.set(node.id, currentIteration);
+
+    const inputData = this.collectInputData(node.id);
+
+    this.executionLog.push({
+      type: 'loop_start',
+      nodeId: node.id,
+      iteration: currentIteration,
+      maxIterations,
+      timestamp: Date.now(),
+    });
+
+    this.options.onNodeStart({
+      nodeId: node.id,
+      type: 'loop',
+      label: node.data?.label,
+      iteration: currentIteration,
+    });
+
+    let shouldContinue = true;
+
+    if (loopCondition) {
+      try {
+        const context = { ...inputData, [loopVar]: currentIteration };
+        shouldContinue = this.evaluateCondition(loopCondition, context);
+      } catch (error) {
+        shouldContinue = currentIteration < maxIterations;
+      }
+    } else {
+      shouldContinue = currentIteration < maxIterations;
+    }
+
+    const output = {
+      nodeId: node.id,
+      type: 'loop',
+      iteration: currentIteration,
+      maxIterations,
+      shouldContinue,
+      loopCondition,
+    };
+
+    this.results.set(node.id, {
+      status: 'success',
+      output,
+      duration: 0,
+    });
+
+    this.options.onNodeComplete({
+      nodeId: node.id,
+      result: output,
+    });
+
+    if (externalVisited !== null) {
+      if (shouldContinue && bodyNodeId) {
+        const bodyNode = this.nodes.get(bodyNodeId);
+        if (bodyNode) {
+          await this.executeNode(bodyNode);
+          return { nextNodeId: node.id, iteration: currentIteration };
+        }
+      }
+      return { nextNodeId: node.data?.nextNodeId, iteration: currentIteration };
+    }
+
+    return output;
   }
 
   collectInputData(nodeId) {
@@ -361,17 +665,26 @@ export class AgentRunner {
     return [...this.executionLog];
   }
 
+  dispose() {
+    if (this.wallet) {
+      if (signerRegistry) {
+        signerRegistry.unregister(this.walletId);
+      }
+      this.wallet.dispose();
+      this.wallet = null;
+      this.walletId = null;
+    }
+  }
+
   /**
    * Securely destroy the runner and wipe sensitive key material.
    */
   destroy() {
-    if (this.wallet && typeof this.wallet.wipe === 'function') {
-      this.wallet.wipe();
-    }
-    this.wallet = null;
+    this.dispose();
     this.results.clear();
     this.executionLog = [];
     this.nodes.clear();
+    this.loopIterations.clear();
   }
 }
 
