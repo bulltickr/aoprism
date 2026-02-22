@@ -191,15 +191,32 @@ export async function setState(patch, notify = true) {
     if (patch.vaultKey && state.vaultLocked) {
         try {
             const walletData = localStorage.getItem('aoprism:wallet')
+            const passAudit = localStorage.getItem('aoprism:vault_audit')
+
+            if (passAudit) {
+                const { salt, hash } = JSON.parse(passAudit)
+                const { verifyPassword } = await import('./core/crypto.js')
+                const isValid = await verifyPassword(patch.vaultKey, salt, hash)
+                if (!isValid) throw new Error('Invalid Vault Password')
+            }
+
             if (walletData) {
                 const encrypted = JSON.parse(walletData)
                 const decryptedJwk = await rustBridge.decryptData(encrypted, patch.vaultKey)
+
+                // If this is the first unlock and no audit exists, create it
+                if (!passAudit) {
+                    const { derivePasswordAudit } = await import('./core/crypto.js')
+                    const audit = await derivePasswordAudit(patch.vaultKey)
+                    localStorage.setItem('aoprism:vault_audit', JSON.stringify(audit))
+                }
+
                 patch.jwk = decryptedJwk
                 patch.vaultLocked = false
             }
         } catch (e) {
             console.error('[State] Failed to unlock vault:', e)
-            throw new Error('Invalid Vault Key')
+            throw new Error(e.message === 'Invalid Vault Password' ? e.message : 'Decryption failed (Check password)')
         }
     }
 

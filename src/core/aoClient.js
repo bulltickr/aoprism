@@ -93,10 +93,16 @@ function createBrowserJwkSigner(jwk, publicKey = null) {
 
       const dataToSign = await create({
         type: 1,
-        publicKey: jwk.n,
+        publicKey: useEnclave ? effectivePublicKey : jwk.n,
         address,
         alg: 'rsa-pss-sha512'
       })
+
+      if (useEnclave) {
+        const { rustBridge } = await import('./rust-bridge.js')
+        const sig = await rustBridge.enclaveSign(dataToSign) // enclaveSign handles PSS
+        return { signature: sig, address }
+      }
 
       const sig = await crypto.subtle.sign({ name: 'RSA-PSS', saltLength: 64 }, key, dataToSign)
       return { signature: new Uint8Array(sig), address }
@@ -303,10 +309,10 @@ export async function makeAoClientLegacy({ jwk }) {
   installFetchDebug()
   const { createDataItemSigner } = await import('@permaweb/aoconnect')
   const signer = createDataItemSigner(jwk)
-  
+
   // LegacyNet typically works without CORS issues (uses default nodes)
   _connectionMethod = CONNECTION_METHOD.DIRECT
-  
+
   return { signer }
 }
 
@@ -369,17 +375,17 @@ function formatErrorForHumans(label, err, httpDetails) {
 
 function isCorsError(err) {
   const msg = String(err?.message ?? '').toLowerCase()
-  return msg.includes('cors') || 
-         msg.includes('failed to fetch') || 
-         msg.includes('networkerror') ||
-         msg.includes('access-control')
+  return msg.includes('cors') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('access-control')
 }
 
 function formatCorsAdvice(err) {
   if (isCorsError(err)) {
     return '\n\n💡 Tip: If you see CORS errors, try:\n' +
-           '1. Running the MCP server (local relay): npm run mcp\n' +
-           '2. Or configure RELAY_URL in your settings'
+      '1. Running the MCP server (local relay): npm run mcp\n' +
+      '2. Or configure RELAY_URL in your settings'
   }
   return ''
 }
@@ -400,7 +406,7 @@ export async function sendAndGetResult({ ao, signer, process, tags, data, relayU
   } catch (e) {
     const httpDetails = await tryExtractHttpDetails(e)
     const isCors = isCorsError(e)
-    
+
     console.error('[Demo-Wallet] ao.message failed', {
       process,
       tags: normalizeTags(tags),
@@ -412,7 +418,7 @@ export async function sendAndGetResult({ ao, signer, process, tags, data, relayU
       keys: e ? Object.getOwnPropertyNames(e) : null,
       isCors
     })
-    
+
     const corsAdvice = isCors ? formatCorsAdvice(e) : ''
     throw new Error(formatErrorForHumans('AO message failed', e, httpDetails) + corsAdvice, { cause: e })
   }
@@ -423,7 +429,7 @@ export async function sendAndGetResult({ ao, signer, process, tags, data, relayU
   } catch (e) {
     const httpDetails = await tryExtractHttpDetails(e)
     const isCors = isCorsError(e)
-    
+
     console.error('[Demo-Wallet] ao.result failed', {
       process,
       messageId,
@@ -435,7 +441,7 @@ export async function sendAndGetResult({ ao, signer, process, tags, data, relayU
       keys: e ? Object.getOwnPropertyNames(e) : null,
       isCors
     })
-    
+
     const corsAdvice = isCors ? formatCorsAdvice(e) : ''
     throw new Error(formatErrorForHumans('AO result failed', e, httpDetails) + corsAdvice, { cause: e })
   }
@@ -454,7 +460,7 @@ export async function sendAndGetResultLegacy({ signer, process, tags, data }) {
       })
     }
 
-    // Use dryrun for instant response (no message/result needed)
+    const { dryrun } = await import('@permaweb/aoconnect/browser')
     const res = await dryrun({
       process,
       tags: normalized,
