@@ -4,6 +4,35 @@ This document tracks known issues, connectivity blockers, and technical debt in 
 
 ## 🔴 High Priority: Architecture & Security
 
+### 0f. Vault Unlock Bypasses Cryptography (App.js)
+- **Issue**: `App.js:281` — The vault unlock handler sets `vaultKey = password` (raw string) and never calls `deriveKeyFromPassword()` / `generateSalt()` from `crypto.js`. These functions exist but are imported and discarded. The vault can be "unlocked" with any string and the JWK decryption will silently fail or use an incorrect key.
+- **Impact**: Password-based vault protection is non-functional. The AES-GCM decrypt path in `rust-bridge.js` receives an underived key.
+- **Fix**: Persist a salt alongside the ciphertext in `localStorage`, then call `const key = await deriveKeyFromPassword(password, storedSalt)` before calling `setState({ vaultKey: key, vaultLocked: false })`.
+
+### 0g. `dryrun` ReferenceError in LegacyNet Path (aoClient.js)
+- **Issue**: `aoClient.js:421` — `sendAndGetResultLegacy()` calls `dryrun(...)` but only imports `createDataItemSigner` from `@permaweb/aoconnect`. `dryrun` is never declared in this scope. This is a guaranteed `ReferenceError` crash when the LegacyNet path is invoked.
+- **Fix**: Destructure `dryrun` alongside `createDataItemSigner`: `const { createDataItemSigner, dryrun } = await import('@permaweb/aoconnect')`.
+
+### 0h. `httpsig` Signing Crashes in Enclave-Only Mode (aoClient.js)
+- **Issue**: `aoClient.js:95` — The `httpsig` branch accesses `jwk.n` directly. In enclave-only mode, `jwk` is `null` (stripped from state after being loaded into the WASM enclave). This throws `Cannot read properties of null (reading 'n')`.
+- **Fix**: Use `effectivePublicKey` (already available in closure) as the fallback: `publicKey: jwk?.n ?? effectivePublicKey`.
+
+### 0i. `DEFAULTS.CU` is Undefined (config.js)
+- **Issue**: `state.js:58` references `DEFAULTS.CU` for `devWallet.cuUrl`, but `config.js` never defines a `CU` key. This silently evaluates to `undefined`, meaning the CU URL field in Dev Tools is always blank.
+- **Fix**: Add `CU: 'https://cu.ao-testnet.xyz'` (or the appropriate HyperBEAM CU URL) to `config.js`.
+
+### 0j. `reviews.js` AO Sync Is Dead Code (marketplace/reviews.js)
+- **Issue**: Both `syncWithAO()` (line 16) and `persistToAO()` (line 83) construct an AO client with `jwk: state.jwk` where `state` is a local empty object `{}`. The real app state is never imported. The signer is always `null`, so all AO writes fail silently staying in-memory only.
+- **Fix**: Import `getState` from `../../state.js` and use `const { jwk, publicKey } = getState()` before building the AO client.
+
+### 0k. SSE Transport Only Supports One Concurrent Client (server.js)
+- **Issue**: `server.js:104` — `sseTransport` is a single module-level variable. A second SSE connection from a new AI client overwrites the reference, silently breaking the first session with no cleanup.
+- **Fix**: Use a `Map<sessionId, SSEServerTransport>` and route `POST /messages` requests using a `sessionId` query param (standard MCP pattern).
+
+### 0l. `eventAttachmenets` Typo Throughout App.js
+- **Issue**: `App.js:26` — The object is named `eventAttachmenets` (missing an 'h'). Used in 10+ places. Not a runtime bug but creates confusion for contributors.
+- **Fix**: Rename to `eventAttachments` across the file.
+
 ### 0. SSE Endpoint: Missing Session Validation
 - **Issue**: `mcp-platform/src/server.js` — SSE connections are accepted without any session token check, meaning any local app can connect.
 - **Goal**: Add session token validation before establishing an SSE stream.

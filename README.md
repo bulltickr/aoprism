@@ -4,7 +4,7 @@
 
 **AOPRISM** is an advanced **Interface** for the [AO Network](https://ao.arweave.dev). It bridges the gap between human operators and autonomous AI processes, providing a comprehensive **Operator Console** to manage, monitor, and interact with decentralized agents.
 
-Think of it as a **unified operation layer for the Permaweb** or a **command center for your autonomous agent fleet.**
+> *Think of it as the **window of the Permaweb** — a command center for your autonomous agent fleet.*
 
 
 
@@ -132,7 +132,7 @@ AOPRISM is a high-performance, security-hardened toolkit for the AO ecosystem, n
 2.  **AI Copilot**: An intelligent AO assistant for real-time code generation, intelligent debugging, and automated security auditing of Lua contracts.
 3.  **AO Testing Framework**: A native, frontend-based testing environment for AO processes. Supports `describe`/`it` blocks, mocking, and dry-run execution.
 4.  **Process Marketplace 2.0 (Simulation)**: A rich ecosystem of AO skills with advanced metadata, dependency resolution, and versioning. **IMPORTANT: Participant reviews are currently implemented as a high-fidelity UX simulation for Alpha.**
-5.  **Cross-Chain Bridge (Simulation)**: A unified multi-bridge aggregator (deBridge, LayerZero, Across) for visual liquidity routing between Arweave and the broader DeFi landscape. **IMPORTANT: Currently implemented as a high-fidelity UX simulation for Alpha—no real transactions are executed.**
+5.  **Cross-Chain Bridge Aggregator**: A unified multi-bridge aggregator (deBridge, LayerZero, Across) for comparing cross-chain routes and fees. Fetches real quotes and links directly to the native platform for execution — AOPRISM never holds or moves funds.
 6.  **MCP Server Hub**: Exposes 37 specialized AO tools to the universal Model Context Protocol, allowing any AI assistant to interact with AO natively.
 
 ## 🛠️ Getting Started

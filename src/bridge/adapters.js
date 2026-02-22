@@ -10,18 +10,21 @@ export class BridgeAdapter {
     throw new Error(`${this.name}: getQuote must be implemented`);
   }
 
-  async executeBridge(quote, signer) {
-    // If no signer is provided, it will fallback to simulated behavior
-    // In production, signer should be an instance of RustSigner
-    if (!signer) {
-      console.warn(`[Bridge] No signer provided for ${this.name}, using simulation mode.`);
-    }
-
+  /**
+   * Returns a deeplink URL to the native platform to execute the bridge.
+   * AOPRISM is a quote aggregator only — no transactions are signed or submitted.
+   */
+  getPlatformLink(quote) {
     return {
-      txHash: `${this.name.toLowerCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      status: 'pending',
+      url: this.buildPlatformUrl(quote),
+      label: `Bridge on ${this.name}`,
       bridge: this.name,
     };
+  }
+
+  buildPlatformUrl(quote) {
+    // Subclasses override this with their specific deep-link format
+    return `https://app.${this.name.toLowerCase()}.finance`;
   }
 
   async getStatus(txHash) {
@@ -189,52 +192,12 @@ export class DeBridgeAdapter extends BridgeAdapter {
     return times[fromChain]?.[toChain] || 600;
   }
 
-  async executeBridge(quote, wallet) {
-    // Try real execution via deBridge API
-    try {
-      if (wallet && wallet.sign) {
-        // Real wallet provided - prepare real transaction
-        const txData = await this.prepareTransaction(quote, wallet);
-        return {
-          txHash: txData.txHash || `debridge-${Date.now()}`,
-          status: 'pending',
-          bridge: this.name,
-          txData,
-        };
-      }
-    } catch (error) {
-      console.warn(`[deBridge] Real execution failed:`, error.message);
-    }
-
-    // Fallback to simulation
-    return {
-      txHash: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      status: 'pending',
-      bridge: this.name,
-    };
-  }
-
-  async prepareTransaction(quote, wallet) {
-    // In production, this would:
-    // 1. Call deBridge API to get transaction data
-    // 2. Sign with user wallet
-    // 3. Submit to chain
-
-    // For now, return mock tx data
-    return {
-      to: '0x...', // deBridge contract address
-      data: '0x...', // encoded call data
-      value: quote.fromAmount,
-      txHash: `0x${Date.now().toString(16)}`,
-    };
-  }
-
-  async getStatus(txHash) {
-    return {
-      txHash,
-      status: 'completed',
-      confirmations: 12,
-    };
+  buildPlatformUrl(quote) {
+    const chainIdMap = { ethereum: 1, bsc: 56, polygon: 137, arbitrum: 42161, optimism: 10, avalanche: 43114, base: 8453 };
+    const srcChainId = chainIdMap[quote.fromChain] || 1;
+    const dstChainId = chainIdMap[quote.toChain] || 42161;
+    const token = quote.fromToken || '0x0000000000000000000000000000000000000000';
+    return `https://app.debridge.finance/deport?inputChain=${srcChainId}&outputChain=${dstChainId}&inputCurrency=${token}&amount=${quote.fromAmount}`;
   }
 }
 
@@ -302,44 +265,12 @@ export class LayerZeroAdapter extends BridgeAdapter {
     return 300;
   }
 
-  async executeBridge(quote, wallet) {
-    // Try real execution
-    try {
-      if (wallet && wallet.sign) {
-        const txData = await this.prepareTransaction(quote, wallet);
-        return {
-          txHash: txData.txHash || `lz-${Date.now()}`,
-          status: 'pending',
-          bridge: this.name,
-          txData,
-        };
-      }
-    } catch (error) {
-      console.warn(`[LayerZero] Real execution failed:`, error.message);
-    }
-
-    return {
-      txHash: `lz-${Date.now()}`,
-      status: 'pending',
-      bridge: this.name,
-    };
-  }
-
-  async prepareTransaction(quote, wallet) {
-    return {
-      to: '0x...', // LayerZero endpoint contract
-      data: '0x...',
-      value: quote.fromAmount,
-      txHash: `0x${Date.now().toString(16)}`,
-    };
-  }
-
-  async getStatus(txHash) {
-    return {
-      txHash,
-      status: 'completed',
-      confirmations: 15,
-    };
+  buildPlatformUrl(quote) {
+    // LayerZero's primary end-user bridge UI is Stargate
+    const chainMap = { ethereum: 'ethereum', arbitrum: 'arbitrum', optimism: 'optimism', polygon: 'polygon', base: 'base', avalanche: 'avalanche' };
+    const src = chainMap[quote.fromChain] || 'ethereum';
+    const dst = chainMap[quote.toChain] || 'arbitrum';
+    return `https://stargate.finance/bridge?srcChain=${src}&dstChain=${dst}`;
   }
 }
 
@@ -348,7 +279,7 @@ export class AcrossAdapter extends BridgeAdapter {
     super({
       name: 'Across',
       supportedChains: ['ethereum', 'arbitrum', 'optimism', 'polygon'],
-      apiUrl: 'https://api.across.to',
+      apiUrl: 'https://app.across.to',
     });
   }
 
@@ -438,44 +369,12 @@ export class AcrossAdapter extends BridgeAdapter {
     return 600;
   }
 
-  async executeBridge(quote, wallet) {
-    // Try real execution
-    try {
-      if (wallet && wallet.sign) {
-        const txData = await this.prepareTransaction(quote, wallet);
-        return {
-          txHash: txData.txHash || `across-${Date.now()}`,
-          status: 'pending',
-          bridge: this.name,
-          txData,
-        };
-      }
-    } catch (error) {
-      console.warn(`[Across] Real execution failed:`, error.message);
-    }
-
-    return {
-      txHash: `across-${Date.now()}`,
-      status: 'pending',
-      bridge: this.name,
-    };
-  }
-
-  async prepareTransaction(quote, wallet) {
-    return {
-      to: '0x...', // Across bridge contract
-      data: '0x...',
-      value: quote.fromAmount,
-      txHash: `0x${Date.now().toString(16)}`,
-    };
-  }
-
-  async getStatus(txHash) {
-    return {
-      txHash,
-      status: 'completed',
-      confirmations: 20,
-    };
+  buildPlatformUrl(quote) {
+    const chainIdMap = { ethereum: 1, arbitrum: 42161, optimism: 10, polygon: 137 };
+    const originId = chainIdMap[quote.fromChain] || 1;
+    const destId = chainIdMap[quote.toChain] || 42161;
+    const token = quote.fromToken || '0x0000000000000000000000000000000000000000';
+    return `https://app.across.to/?originChainId=${originId}&destinationChainId=${destId}&inputToken=${token}&amount=${quote.fromAmount}`;
   }
 }
 
